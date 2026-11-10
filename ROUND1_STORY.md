@@ -126,6 +126,11 @@ Use the second camera's tracking (broadcast) to fill ball gaps, after lining up 
 - **10 Nov** — Trained the final model on all 7 practice matches (`models/possession.txt`).
   Rehearsed the full pipeline with it on a fake file in the competition's format: it ran, the
   official validator accepted the CSV, and two runs produced the identical file.
+- **10 Nov** — Put the code in a private GitHub repo (to be made public at submission time).
+- **10 Nov** — Wrote a second, stronger kind of model (a small neural network that reads
+  the match as a sequence) to try to beat 0.68. It needs a GPU, so it is trained on Kaggle
+  using only the public DFL matches; see `kaggle/README.md`. The match data never goes to
+  Kaggle. Not trained yet, so its score is unknown.
 - **Ready for the real data.** When it arrives: run `scripts/atd_stats.py`, share the summary
   numbers, adjust the practice exam's noise if needed, then run `scripts/run_round1.py`.
 - **Still unknown until the real data arrives:** how closely the practice exam's noise matches
