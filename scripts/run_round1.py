@@ -2,6 +2,8 @@
 
     python scripts/run_round1.py                          # learned model (models/possession.txt)
     python scripts/run_round1.py --method rules           # rule engine only, no model needed
+    python scripts/run_round1.py --method sequence        # sequence model (models/sequence.pt)
+    python scripts/run_round1.py --method both            # average of tree and sequence models
     python scripts/run_round1.py --data D:\\mtah2027 --out outputs\\team.csv
 
 Prints summary numbers only. If the public 5-minute ground truth is available it is scored as a
@@ -26,6 +28,7 @@ from possession.scoring import line, score  # noqa: E402
 from possession.vendor import possession_metrics as pm  # noqa: E402
 
 MODEL_PATH = os.path.join(ROOT, "models", "possession.txt")
+SEQUENCE_PATH = os.path.join(ROOT, "models", "sequence.pt")
 PUBLIC_GT = os.path.join(ROOT, "official", "evaluation", "gt", "BAR-ATH_possession_gt_public.csv")
 SWITCH_TEAM, SWITCH_DEAD = 12.0, 32.0
 
@@ -40,7 +43,8 @@ def write_submission(path, codes):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--data", default=None)
-    parser.add_argument("--method", choices=("model", "rules"), default="model")
+    parser.add_argument("--method", choices=("model", "rules", "sequence", "both"),
+                        default="model")
     parser.add_argument("--out", default=os.path.join(ROOT, "outputs", "submission.csv"))
     args = parser.parse_args()
 
@@ -49,9 +53,15 @@ if __name__ == '__main__':
     if args.method == "rules":
         codes = engine.label_match(match, f)
     else:
-        import lightgbm as lgb
-        booster = lgb.Booster(model_file=MODEL_PATH)
-        prob = model.predict(booster, match, f)
+        probs = []
+        if args.method in ("model", "both"):
+            import lightgbm as lgb
+            probs.append(model.predict(lgb.Booster(model_file=MODEL_PATH), match, f))
+        if args.method in ("sequence", "both"):
+            from possession import seqmodel
+            net, ckpt = seqmodel.load(SEQUENCE_PATH)
+            probs.append(seqmodel.predict(net, ckpt, match, f))
+        prob = sum(probs) / len(probs)
         codes = decode.decode_match(prob, match.runs, SWITCH_TEAM, SWITCH_DEAD)
 
     assert len(codes) == match.n_frames

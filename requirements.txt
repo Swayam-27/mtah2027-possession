@@ -3,3 +3,4 @@ numpy==2.2.6
 pandas==2.3.3
 scipy==1.15.3
 lightgbm==4.7.0
+torch==2.14.1  # CPU build is enough: pip install torch==2.14.1 --index-url https://download.pytorch.org/whl/cpu

@@ -60,8 +60,8 @@ def swap_teams(f):
     return replace(f, d_home=f.d_away, d_away=f.d_home, n_home=f.n_away, n_away=f.n_home)
 
 
-def matrix(match, f, rules=None):
-    """(features [n_frames, n_features], names)."""
+def base_features(match, f, rules=None):
+    """{name: [n_frames] float32}: what is happening on each frame, with no time context."""
     length, width = match.pitch
     rule_labels = engine.label_match(match, f, rules)
 
@@ -111,7 +111,12 @@ def matrix(match, f, rules=None):
     base["until_diff"] = base["until_on_away"] - base["until_on_home"]
     since, until = _since_until(base["seen"] > 0)
     base["since_seen"], base["until_seen"] = since, until
+    return base
 
+
+def matrix(match, f, rules=None):
+    """(features [n_frames, n_features], names): each frame plus summaries of its surroundings."""
+    base = base_features(match, f, rules)
     columns, names = [], []
     for name, values in base.items():
         columns.append(values)
