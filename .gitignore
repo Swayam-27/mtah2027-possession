@@ -1,0 +1,22 @@
+# Match data is licensed for the competition only and must never be committed.
+data/
+official/
+# External open datasets are downloaded by scripts, not stored here.
+external/
+# Generated: caches, submissions, reports. Anything frame-level derived from match data stays out.
+cache/
+outputs/
+*.csv
+*.npz
+*.mp4
+
+.venv/
+.pipcache/
+__pycache__/
+*.py[cod]
+.idea/
+.vscode/
+
+# Local working notes, not part of the submission.
+CLAUDE.md
+ROUND1_STORY.md

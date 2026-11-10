@@ -1,0 +1,5 @@
+# Python 3.10. Pinned so the submission CSV can be regenerated exactly.
+numpy==2.2.6
+pandas==2.3.3
+scipy==1.15.3
+lightgbm==4.7.0
