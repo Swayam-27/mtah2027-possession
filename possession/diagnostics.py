@@ -53,6 +53,14 @@ def tracking_stats(match):
     out["seen ball outside the pitch lines (share of seen)"] = "{:.4f}".format(
         float(np.nansum(off)) / max(1, int(seen[rows].sum())))
 
+    known = seen[rows]
+    out["seen ball beyond the touchline y < 0 (share of seen)"] = "{:.4f}".format(
+        float(np.nansum(by < 0)) / max(1, int(known.sum())))
+    out["seen ball beyond the touchline y > width (share of seen)"] = "{:.4f}".format(
+        float(np.nansum(by > width)) / max(1, int(known.sum())))
+    out["seen ball beyond a goal line (share of seen)"] = "{:.4f}".format(
+        float(np.nansum((bx < 0) | (bx > length))) / max(1, int(known.sum())))
+
     # Jitter: spread of the second difference, which a smooth path keeps near zero.
     second = match.bx[2:] - 2 * match.bx[1:-1] + match.bx[:-2]
     out["ball jitter proxy, metres (median |2nd difference|)"] = "{:.4f}".format(

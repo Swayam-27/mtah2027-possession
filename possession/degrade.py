@@ -22,6 +22,9 @@ import numpy as np
 from .match import D, X
 
 
+AIR_LOST = 3.0
+
+
 @dataclass
 class Noise:
     ball_missing: float = 0.41      # target share of unseen ball frames inside the runs
@@ -33,13 +36,19 @@ class Noise:
     feet_factor: float = 2.5        # ... with a player within 1 m (ball hidden by the body)
     dead_factor: float = 3.0        # ... while the ball is out of play
     ball_jitter: float = 0.01       # metres, per-frame gaussian
-    ball_drift: float = 0.6         # metres, slowly wandering position error (per axis)
+    ball_drift: float = 0.45         # metres, slowly wandering position error (per axis)
     ball_false: float = 0.0015      # share of seen frames replaced by a false detection
     player_missing: float = 0.07    # share of player observations dropped
     player_mean_gap: float = 150.0  # mean length of a raw player dropout, frames
     player_fill: int = 60           # dropouts up to this long are filled (player stays tracked)
     player_jitter: float = 0.003    # metres
     player_smooth: int = 7          # moving-average window on player positions, frames
+    cam_height: float = 28.0        # metres above the pitch; 0 switches the effect off
+    cam_back: float = 30.0          # metres behind the touchline
+    cam_along: float = 0.0          # metres from the halfway line, along the pitch
+    cam_side: int = -1              # -1: camera beyond y = 0, +1: beyond y = width
+    air_lost: float = AIR_LOST      # metres: a ball higher than this is never detected
+    out_seen: float = 0.4           # share of the ball's trips beyond the lines that are seen
     dead_hidden: float = 0.45       # share of stoppages where the ball is never seen at all
 
 
@@ -66,6 +75,12 @@ def random_noise(rng):
         player_fill=int(rng.integers(20, 101)),
         player_jitter=float(rng.uniform(0.0, 0.03)),
         player_smooth=int(rng.integers(1, 12)),
+        cam_height=float(rng.uniform(12.0, 30.0)),
+        cam_back=float(rng.uniform(15.0, 50.0)),
+        cam_along=float(rng.uniform(-15.0, 15.0)),
+        cam_side=int(rng.choice((-1, 1))),
+        air_lost=float(rng.uniform(2.5, 8.0)),
+        out_seen=float(rng.uniform(0.1, 1.0)),
         dead_hidden=float(rng.uniform(0.15, 0.75)))
 
 
@@ -144,6 +159,28 @@ def _fill_line(values, keep_missing):
     return filled
 
 
+def _parallax(match, noise):
+    """Where a single camera draws the ball on the ground when it is in the air.
+
+    The tracking has no height: an airborne ball is placed where the camera's line of
+    sight through it meets the pitch, which is further from the camera than the ball
+    really is. A ball 3 m up, seen from a stand 20 m high and 50 m away, lands about 9 m
+    off. Comparing the competition's two camera feeds shows exactly this: when they
+    disagree about the ball it is across the pitch, by metres.
+    """
+    bx, by = match.bx.copy(), match.by.copy()
+    if match.bz is None or noise.cam_height <= 0:
+        return bx, by
+    length, width = match.pitch
+    cam_x = length / 2.0 + noise.cam_along
+    cam_y = -noise.cam_back if noise.cam_side < 0 else width + noise.cam_back
+    height = np.clip(np.nan_to_num(match.bz), 0.0, 0.7 * noise.cam_height)
+    stretch = height / (noise.cam_height - height)
+    bx += (stretch * (bx - cam_x)).astype(np.float32)
+    by += (stretch * (by - cam_y)).astype(np.float32)
+    return bx, by
+
+
 def _drift(rng, n, size, fps):
     """Smooth wandering error with standard deviation `size`, changing over a few seconds."""
     if size <= 0:
@@ -219,10 +256,21 @@ def degrade(match, noise=None, seed=0):
     n, slots = match.px.shape
     length, width = match.pitch
 
+    seen_x, seen_y = _parallax(match, noise)
     if match.labels is not None:
         dead_x, dead_y = simulate_dead_ball(match, noise, rng)
+        alive = ~np.isnan(dead_x) & (match.labels != D) & (match.labels != X)
+        dead_x[alive], dead_y[alive] = seen_x[alive], seen_y[alive]
+        if match.bz is not None:
+            high = alive & (np.nan_to_num(match.bz) > noise.air_lost)
+            dead_x[high], dead_y[high] = np.nan, np.nan
     else:
-        dead_x, dead_y = match.bx, match.by
+        dead_x, dead_y = seen_x, seen_y
+    # The tracker looks at the pitch: most of what the ball does beyond the lines is not seen.
+    beyond = (dead_x < 0) | (dead_x > length) | (dead_y < 0) | (dead_y > width)
+    for a, b in _segments(beyond):
+        if rng.random() > noise.out_seen:
+            dead_x[a:b], dead_y[a:b] = np.nan, np.nan
     missing = _ball_missing(match, noise, rng, np.isnan(dead_x))
     bx = dead_x + rng.normal(0.0, noise.ball_jitter, n).astype(np.float32)
     by = dead_y + rng.normal(0.0, noise.ball_jitter, n).astype(np.float32)

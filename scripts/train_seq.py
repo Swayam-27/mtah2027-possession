@@ -38,11 +38,13 @@ DECODERS = ((2.0, 2.0), (4.0, 8.0), (8.0, 16.0), (12.0, 32.0), (16.0, 48.0))
 STRESS = {
     "calibrated": Noise(),
     "ball unseen 55%": Noise(ball_missing=0.55),
-    "no position error": Noise(ball_drift=0.0),
+    "ball unseen 25%": Noise(ball_missing=0.25),
+    "no camera effect": Noise(cam_height=0.0, air_lost=99.0, out_seen=1.0),
     "big position error": Noise(ball_drift=1.2),
     "short gaps, jitter": Noise(ball_mean_gap=40.0, ball_fill=0, ball_smooth=1, ball_jitter=0.15,
                                 ball_drift=0.0, player_mean_gap=30.0, player_fill=0,
-                                player_smooth=1, player_jitter=0.10, dead_hidden=0.25),
+                                player_smooth=1, player_jitter=0.10, dead_hidden=0.25,
+                                cam_height=0.0, air_lost=99.0, out_seen=1.0),
 }
 
 
@@ -204,12 +206,15 @@ if __name__ == '__main__':
     if stress:
         table("same models under other noise (viterbi 12/32)", stress)
 
+    # Final models on every match: both kinds, so the choice can be made from the scores above
+    # without another run. scripts/run_round1.py picks by tag.
     members = []
-    for seed in range(args.seeds):
-        net, mean, std = train(train_data, args.steps, device, seed=99 + seed,
-                               label="final {}".format(seed))
-        members.append({"state": net.cpu().state_dict(), "names": names, "mean": mean,
-                        "std": std, "config": seqmodel.CONFIG, "tag": "shape"})
+    for tag, cols, count in (("shape", everything, args.seeds), ("plain", plain, 2)):
+        for seed in range(count):
+            net, mean, std = train(train_data, args.steps, device, seed=99 + seed,
+                                   label="final {} {}".format(tag, seed), cols=cols)
+            members.append({"state": net.cpu().state_dict(), "names": [names[i] for i in cols],
+                            "mean": mean, "std": std, "config": seqmodel.CONFIG, "tag": tag})
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     torch.save({"members": members}, args.out)
     print()

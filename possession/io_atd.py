@@ -45,6 +45,46 @@ def _xy(group):
         return np.nan, np.nan
 
 
+def frame_rate(meta_path, default=25.0):
+    """Frames per second stated in the metadata, or the default if it does not say."""
+    for node in ET.parse(meta_path).getroot().iter("FrameRate"):
+        try:
+            return float(node.text)
+        except (TypeError, ValueError):
+            pass
+    return default
+
+
+def load_feed(meta_path, raw_path, pitch=(105.3, 68.0)):
+    """Any ATD feed on its own timeline (e.g. the broadcast recording), as a Match without runs.
+
+    Row i is the feed's own video frame i; nothing here relates it to the tactical video.
+    """
+    pteam = slot_teams(meta_path)
+    n_slots = len(pteam)
+    with open(raw_path) as handle:
+        n_frames = max((int(line.split(":", 1)[0]) for line in handle if ":" in line), default=0)
+    px = np.full((n_frames, n_slots), np.nan, dtype=np.float32)
+    py = np.full((n_frames, n_slots), np.nan, dtype=np.float32)
+    bx = np.full(n_frames, np.nan, dtype=np.float32)
+    by = np.full(n_frames, np.nan, dtype=np.float32)
+    with open(raw_path) as handle:
+        for line in handle:
+            parts = line.rstrip().split(":")
+            if len(parts) != 3:
+                continue
+            row = int(parts[0]) - 1
+            if row < 0:
+                continue
+            for slot, group in enumerate(parts[1].split(";")[:n_slots]):
+                px[row, slot], py[row, slot] = _xy(group)
+            bx[row], by[row] = _xy(parts[2])
+    length, width = pitch
+    return Match(name="feed", fps=int(round(frame_rate(meta_path))), pitch=pitch,
+                 px=px * length, py=py * width, pteam=pteam,
+                 bx=bx * length, by=by * width, runs=[(0, n_frames)])
+
+
 def load(meta_path, raw_path, game="BAR-ATH"):
     info = GAMES[game]
     pteam = slot_teams(meta_path)

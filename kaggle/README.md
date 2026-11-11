@@ -14,7 +14,7 @@ there. **The competition match data must never be uploaded to Kaggle.**
 4. Click **Save Version → Save & Run All (Commit)**. This runs in the background, so the
    browser can be closed. It downloads the DFL matches (2.6 GB), converts them, runs a
    leave-one-match-out test (the network with and without the team-shape inputs), then
-   trains the final models. Expect about 2.5 hours. When it is done, open the saved version to see the log and output.
+   trains the final models. Expect about 3 hours. When it is done, open the saved version to see the log and output.
 5. When it finishes:
    - Copy the text from `mean spellF1 over 7 held-out matches` down to the end.
    - Download `sequence.pt` from the **Output** panel. If the browser saves it as
