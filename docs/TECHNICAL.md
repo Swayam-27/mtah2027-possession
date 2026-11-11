@@ -17,17 +17,22 @@ pipeline has four stages:
    motionless, players all walking, ball unseen for a long time). A team takes possession only
    by showing control: about a second on the ball, or two spells on the ball in a row. A lone
    touch changes nothing; the change is dated to the first touch.
-3. **Learned model.** A gradient-boosted classifier (LightGBM, 3 classes) on the features, their
+3. **Tree model (fallback).** A gradient-boosted classifier (LightGBM, 3 classes) on the features, their
    values a few frames before and after, and averages over the preceding and following
    0.5 to 8 seconds. The rule engine's verdict is one of its inputs. Predictions are made twice,
    as given and with the teams swapped, and averaged, so the model cannot favour one side.
-4. **Decoding.** Viterbi over the per-frame probabilities with a fixed price for a change of
+4. **Sequence model (submitted).** A small temporal convolutional network (MS-TCN style:
+   3 stages of 10 dilated 1-D convolution layers, 64 channels, about 0.5 M parameters) that
+   reads the per-frame features of the whole half and outputs H/A/D probabilities per frame.
+   Trained with cross-entropy plus a smoothness term, on GPU, on the external matches only.
+   Predictions are averaged over the two team orderings.
+5. **Decoding.** Viterbi over the per-frame probabilities with a fixed price for a change of
    team and a higher one for a dead/alive change. This removes flicker, which the ranking
    metric punishes as invented possessions.
 
-Why this rather than rules alone: on the external benchmark the rule engine scores spellF1 0.50
-and the model 0.68 (leave-one-match-out over 7 matches; the baseline scores 0.30 on the same
-benchmark).
+Why this rather than rules alone: on the external benchmark (leave-one-match-out over 7
+matches) the baseline scores spellF1 0.30, the rule engine 0.50, the tree model 0.68 and the
+sequence model 0.78 (worst match 0.73, best 0.84).
 
 ## 2. Assets used and dropped
 

@@ -1,8 +1,8 @@
 """One command: competition data in, submission CSV out.
 
-    python scripts/run_round1.py                          # learned model (models/possession.txt)
+    python scripts/run_round1.py                          # sequence model (models/sequence.pt)
+    python scripts/run_round1.py --method model           # tree model (models/possession.txt)
     python scripts/run_round1.py --method rules           # rule engine only, no model needed
-    python scripts/run_round1.py --method sequence        # sequence model (models/sequence.pt)
     python scripts/run_round1.py --method both            # average of tree and sequence models
     python scripts/run_round1.py --data D:\\mtah2027 --out outputs\\team.csv
 
@@ -44,7 +44,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--data", default=None)
     parser.add_argument("--method", choices=("model", "rules", "sequence", "both"),
-                        default="model")
+                        default="sequence")
     parser.add_argument("--out", default=os.path.join(ROOT, "outputs", "submission.csv"))
     args = parser.parse_args()
 

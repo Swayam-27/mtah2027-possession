@@ -23,10 +23,13 @@ location with `--data` (or set `MTAH_DATA_DIR`). Then:
 python scripts/run_round1.py --out outputs/<team_name>.csv
 ```
 
-This reads the tactical tracking, applies the trained model in `models/possession.txt` and writes
+This reads the tactical tracking, applies the trained sequence model in `models/sequence.pt` and writes
 the 199,319-row CSV.
 
 ## Retrain the model (optional)
+
+The submitted sequence model was trained on a GPU with `scripts/train_seq.py`; see
+`kaggle/README.md`. The steps below rebuild the tree model (`--method model`), the fallback.
 
 The model is trained only on other matches: the open DFL / Sportec tracking dataset
 (Bassek et al., *Scientific Data* 2025, CC-BY 4.0). To rebuild it from scratch, download the

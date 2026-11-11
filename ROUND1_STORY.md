@@ -136,10 +136,16 @@ Use the second camera's tracking (broadcast) to fill ball gaps, after lining up 
   on the laptop (a full match in about 5 seconds). Its honest score, on matches it never
   saw, is printed in the Kaggle log and still has to be compared with the tree model's 0.68
   before we decide which one to submit.
+- **11 Nov** — Kaggle scores are in. On matches it never saw, the sequence model scores
+  **0.78** (worst match 0.73, best 0.84) against the tree model's 0.68 (its worst match is close
+  to the tree model's best). It also finds about the right number of possessions, where
+  the tree model found too few. It is now the default in `scripts/run_round1.py`; the tree
+  model stays as a fallback (`--method model`). Not yet checked: how the sequence model
+  holds up under noise it was not trained on.
 - **Ready for the real data.** When it arrives: run `scripts/atd_stats.py`, share the summary
   numbers, adjust the practice exam's noise if needed, then run `scripts/run_round1.py`.
 - **Still unknown until the real data arrives:** how closely the practice exam's noise matches
-  the real tracking, and so how much of the 0.68 carries over.
+  the real tracking, and so how much of the 0.78 carries over.
 
 ## What is in the folder
 
