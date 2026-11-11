@@ -31,6 +31,7 @@ MIN_CONTROL = 50
 CROP = 4096
 BATCH = 8
 SWAP = np.array([A, H, D, 3], dtype=np.int64)
+WIDE = {"channels": 96, "layers": 11, "stages": 3, "dropout": 0.2}
 DECODERS = ((2.0, 2.0), (4.0, 8.0), (8.0, 16.0), (12.0, 32.0), (16.0, 48.0))
 # Held-out matches are scored under the calibrated noise and under a few others, to see how
 # much the score depends on the noise guess being right.
@@ -85,14 +86,14 @@ def batches(copies, mean, std, rng, device):
                torch.from_numpy(np.stack(ys)).to(device))
 
 
-def train(copies, steps, device, seed, label):
+def train(copies, steps, device, seed, label, config=None):
     torch.manual_seed(seed)
     rng = np.random.default_rng(seed)
     sample = np.vstack([c["x"][::50] for c in copies])
     mean = sample.mean(axis=0).astype(np.float32)
     std = (sample.std(axis=0) + 1e-3).astype(np.float32)
 
-    net = seqmodel.Net(len(mean), **seqmodel.CONFIG).to(device)
+    net = seqmodel.Net(len(mean), **(config or seqmodel.CONFIG)).to(device)
     optimiser = torch.optim.AdamW(net.parameters(), lr=1e-3, weight_decay=1e-4)
     schedule = torch.optim.lr_scheduler.OneCycleLR(optimiser, max_lr=1e-3, total_steps=steps)
     net.train()
@@ -125,6 +126,8 @@ if __name__ == '__main__':
     parser.add_argument("--matches", type=int, default=0, help="use only the first N (testing)")
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--no-stress", action="store_true", help="calibrated noise only")
+    parser.add_argument("--seeds", type=int, default=3, help="base models per ensemble")
+    parser.add_argument("--no-wide", action="store_true", help="skip the wider model")
     parser.add_argument("--out", default=os.path.join(ROOT, "models", "sequence.pt"))
     args = parser.parse_args()
 
@@ -148,48 +151,73 @@ if __name__ == '__main__':
     print("prepared {} training copies, {} features ({:.0f} s)".format(
         len(train_data), len(names), time.time() - started), flush=True)
 
-    totals = {}
-    stress = {}
+    # Members of the ensemble: a few base models that differ only by seed, and one wider model.
+    plan = [("base", seqmodel.CONFIG, s) for s in range(args.seeds)]
+    if not args.no_wide:
+        plan.append(("wide", WIDE, 50))
+
+    def spell(prob, item, team=12.0, dead=32.0):
+        pred = decode.decode_match(prob, item["runs"], team, dead)
+        return score(item["y"].astype(np.int8), pred)
+
+    totals, stress = {}, {}
     for k in range(folds):
         copies = [c for i, group in enumerate(by_match) if i != k for c in group]
-        net, mean, std = train(copies, args.cv_steps, device, seed=k, label="fold {}".format(k))
-        ckpt = {"names": names, "mean": mean, "std": std}
-        for j, variant in enumerate(variants[1:], start=1):
-            other = test_data[k * len(variants) + j]
-            pred = decode.decode_match(
-                seqmodel.predict(net, ckpt, other["match"], other["features"], device),
-                other["runs"], 12.0, 32.0)
-            stress.setdefault(variant, []).append(score(other["y"].astype(np.int8), pred)["spell"])
+        probs = {v: [] for v in variants}
+        for tag, config, seed in plan:
+            net, mean, std = train(copies, args.cv_steps, device, seed=1000 * seed + k,
+                                   label="fold {} {} {}".format(k, tag, seed), config=config)
+            ckpt = {"names": names, "mean": mean, "std": std}
+            for j, variant in enumerate(variants):
+                item = test_data[k * len(variants) + j]
+                probs[variant].append(
+                    seqmodel.predict(net, ckpt, item["match"], item["features"], device))
+            del net
         test = test_data[k * len(variants)]
-        prob = seqmodel.predict(net, ckpt, test["match"], test["features"], device)
+        mine = probs[variants[0]]
+        base = mine[:args.seeds]
         print("held out {}".format(os.path.basename(paths[k])), flush=True)
-        argmax = np.full(len(prob), 3, dtype=np.int8)
-        for a, b in test["runs"]:
-            argmax[a:b] = prob[a:b].argmax(axis=1)
-        results = {"sequence argmax": argmax}
+        results = {"single base model (seed 0)": spell(base[0], test)}
+        if len(base) > 1:
+            results["ensemble of {} base".format(len(base))] = spell(sum(base) / len(base), test)
+        if not args.no_wide:
+            results["single wide model"] = spell(mine[-1], test)
+            results["ensemble of all {}".format(len(mine))] = spell(sum(mine) / len(mine), test)
+        everything = sum(mine) / len(mine)
         for team, dead in DECODERS:
-            results["sequence viterbi {:g}/{:g}".format(team, dead)] = decode.decode_match(
-                prob, test["runs"], team, dead)
-        for name, pred in results.items():
-            s = score(test["y"].astype(np.int8), pred)
+            results["all, viterbi {:g}/{:g}".format(team, dead)] = spell(everything, test, team, dead)
+        for name, s in results.items():
             print("  " + line(name, s), flush=True)
             totals.setdefault(name, []).append(s["spell"])
+        for j, variant in enumerate(variants[1:], start=1):
+            item = test_data[k * len(variants) + j]
+            both = {"single base": probs[variant][0],
+                    "ensemble of all": sum(probs[variant]) / len(probs[variant])}
+            for name, prob in both.items():
+                stress.setdefault("{:<20} {}".format(variant, name), []).append(
+                    spell(prob, item)["spell"])
+
+    def table(title, rows):
+        print()
+        print(title)
+        for name, values in rows.items():
+            print("  {:<40} {:.4f}  (min {:.4f}, max {:.4f})".format(
+                name, float(np.mean(values)), float(np.min(values)), float(np.max(values))))
 
     if totals:
-        print("\nmean spellF1 over {} held-out matches, calibrated noise".format(
-            len(next(iter(totals.values())))))
-        for name, values in totals.items():
-            print("  {:<32} {:.4f}  (min {:.4f}, max {:.4f})".format(
-                name, float(np.mean(values)), float(np.min(values)), float(np.max(values))))
-
+        table("mean spellF1 over {} held-out matches, calibrated noise (viterbi 12/32 unless "
+              "stated)".format(len(next(iter(totals.values())))), totals)
     if stress:
-        print()
-        print("same models under other noise (viterbi 12/32)")
-        for name, values in stress.items():
-            print("  {:<32} {:.4f}  (min {:.4f}, max {:.4f})".format(
-                name, float(np.mean(values)), float(np.min(values)), float(np.max(values))))
+        table("same models under other noise (viterbi 12/32)", stress)
 
-    net, mean, std = train(train_data, args.steps, device, seed=99, label="final")
+    members = []
+    for tag, config, seed in plan:
+        net, mean, std = train(train_data, args.steps, device, seed=99 + seed,
+                               label="final {} {}".format(tag, seed), config=config)
+        members.append({"state": net.cpu().state_dict(), "names": names, "mean": mean,
+                        "std": std, "config": config, "tag": tag})
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
-    seqmodel.save(args.out, net.cpu(), names, mean, std)
-    print("\nsaved {} ({:.0f} s total)".format(args.out, time.time() - started))
+    torch.save({"members": members}, args.out)
+    print()
+    print("saved {} with {} models ({:.0f} s total)".format(
+        args.out, len(members), time.time() - started))

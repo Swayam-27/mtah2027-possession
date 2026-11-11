@@ -84,12 +84,32 @@ def save(path, net, names, mean, std, config=CONFIG):
                 "config": config}, path)
 
 
+def load_all(path, tags=None):
+    """Every model in a checkpoint as [(net, ckpt)]. A checkpoint holds one model or several
+    ("members") whose predictions are averaged; `tags` keeps only the members so tagged."""
+    loaded = torch.load(path, map_location="cpu", weights_only=False)
+    out = []
+    for ckpt in loaded.get("members", [loaded]):
+        if tags is not None and ckpt.get("tag") not in tags:
+            continue
+        net = Net(len(ckpt["names"]), **ckpt["config"])
+        net.load_state_dict(ckpt["state"])
+        net.eval()
+        out.append((net, ckpt))
+    return out
+
+
 def load(path):
-    ckpt = torch.load(path, map_location="cpu", weights_only=False)
-    net = Net(len(ckpt["names"]), **ckpt["config"])
-    net.load_state_dict(ckpt["state"])
-    net.eval()
-    return net, ckpt
+    return load_all(path)[0]
+
+
+def predict_all(members, match, f, device="cpu"):
+    """Mean of the members' probabilities."""
+    total = None
+    for net, ckpt in members:
+        prob = predict(net, ckpt, match, f, device)
+        total = prob if total is None else total + prob
+    return total / len(members)
 
 
 def _run(net, x, mean, std, device):

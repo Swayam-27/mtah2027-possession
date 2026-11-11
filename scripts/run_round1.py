@@ -31,6 +31,7 @@ MODEL_PATH = os.path.join(ROOT, "models", "possession.txt")
 SEQUENCE_PATH = os.path.join(ROOT, "models", "sequence.pt")
 PUBLIC_GT = os.path.join(ROOT, "official", "evaluation", "gt", "BAR-ATH_possession_gt_public.csv")
 SWITCH_TEAM, SWITCH_DEAD = 12.0, 32.0
+SEQUENCE_TAGS = None  # None = every model in the checkpoint; or e.g. ("base",)
 
 
 def write_submission(path, codes):
@@ -59,8 +60,8 @@ if __name__ == '__main__':
             probs.append(model.predict(lgb.Booster(model_file=MODEL_PATH), match, f))
         if args.method in ("sequence", "both"):
             from possession import seqmodel
-            net, ckpt = seqmodel.load(SEQUENCE_PATH)
-            probs.append(seqmodel.predict(net, ckpt, match, f))
+            members = seqmodel.load_all(SEQUENCE_PATH, SEQUENCE_TAGS)
+            probs.append(seqmodel.predict_all(members, match, f))
         prob = sum(probs) / len(probs)
         codes = decode.decode_match(prob, match.runs, SWITCH_TEAM, SWITCH_DEAD)
 
