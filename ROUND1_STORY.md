@@ -62,7 +62,7 @@ scorer's noise level).
 Use the second camera's tracking (broadcast) to fill ball gaps, after lining up the two timelines.
 
 ### Step 5 — Hand-in
-- `<team_name>.csv`, checked with `validate_submission.py`.
+- `Chandal Chowkdi.csv`, checked with `validate_submission.py`.
 - Public GitHub repo that rebuilds exactly the same CSV with one command. No match data in it.
 - Short technical document.
 
@@ -78,7 +78,7 @@ Use the second camera's tracking (broadcast) to fill ball gaps, after lining up 
 
 - **Match data bundle is not on this computer yet** (searched D:, Downloads, Desktop, Documents).
   It has to be downloaded from the link in the enrolment email and unpacked into `official/data/`.
-- Team name and members (3 to 5 people needed for Round 2).
+- Team name is **Chandal Chowkdi**. Member list still to be written down.
 
 ## Progress log
 

@@ -98,5 +98,5 @@ The original process, kept for reference:
    and prefer approaches we can finish, explain in the technical doc and reproduce exactly.
 
 ## Team
-Team name (must match all members' registration exactly): <FILL IN>
+Team name (must match all members' registration exactly): Chandal Chowkdi
 Members: <FILL IN>

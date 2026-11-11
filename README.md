@@ -20,7 +20,7 @@ Unpack the competition data bundle so that `official/data/tactical/` exists, or 
 location with `--data` (or set `MTAH_DATA_DIR`). Then:
 
 ```
-python scripts/run_round1.py --out outputs/<team_name>.csv
+python scripts/run_round1.py --out "outputs/Chandal Chowkdi.csv"
 ```
 
 This reads the tactical tracking, applies the trained sequence model in `models/sequence.pt` and writes

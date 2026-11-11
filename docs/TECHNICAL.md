@@ -1,6 +1,6 @@
 # Technical document — Round 1, ball possession
 
-Team: `<team_name>` · Draft. Numbers marked *external benchmark* come from other matches, not
+Team: Chandal Chowkdi · Draft. Numbers marked *external benchmark* come from other matches, not
 from the competition match.
 
 ## 1. Approach
@@ -84,4 +84,4 @@ label meaning), not to choose parameters.
 ## 6. Reproduction
 
 See `README.md`: install pinned dependencies, place the data bundle, run
-`python scripts/run_round1.py --out outputs/<team_name>.csv`.
+`python scripts/run_round1.py --out "outputs/Chandal Chowkdi.csv"`.
