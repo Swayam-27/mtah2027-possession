@@ -131,6 +131,11 @@ Use the second camera's tracking (broadcast) to fill ball gaps, after lining up 
   the match as a sequence) to try to beat 0.68. It needs a GPU, so it is trained on Kaggle
   using only the public DFL matches; see `kaggle/README.md`. The match data never goes to
   Kaggle. Not trained yet, so its score is unknown.
+- **11 Nov** — First Kaggle run trained nothing: one notebook cell was empty and stopped the
+  run. Fixed, rerun, and the trained file is now in `models/sequence.pt`. It loads and runs
+  on the laptop (a full match in about 5 seconds). Its honest score, on matches it never
+  saw, is printed in the Kaggle log and still has to be compared with the tree model's 0.68
+  before we decide which one to submit.
 - **Ready for the real data.** When it arrives: run `scripts/atd_stats.py`, share the summary
   numbers, adjust the practice exam's noise if needed, then run `scripts/run_round1.py`.
 - **Still unknown until the real data arrives:** how closely the practice exam's noise matches
