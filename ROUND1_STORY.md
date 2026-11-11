@@ -156,8 +156,11 @@ Use the second camera's tracking (broadcast) to fill ball gaps, after lining up 
   summary numbers of a damaged practice match now sit close to the real ones. The models
   trained on the old damage must be retrained on the new one (next Kaggle run). That run also
   scores each model under several other kinds of damage, so we see how fragile the score is.
-- **Next:** retrain on Kaggle, put the new `sequence.pt` in `models/`, then run
-  `scripts/run_round1.py` to write the submission and check it with the official validator.
+- **11 Nov** — Second Kaggle run done: the sequence model retrained on the realistic damage
+  is in `models/sequence.pt` (the tree model was retrained too, as the fallback). Wrote the
+  submission `outputs/Chandal Chowkdi.csv` with it: the official validator accepts it and two
+  runs give the identical file. Its held-out practice scores are in the Kaggle log and still
+  have to be written down here.
 - **Still unknown:** the real score. The practice exam now resembles the real tracking much
   more closely, but it is still other matches with simulated damage.
 
