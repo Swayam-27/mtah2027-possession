@@ -63,7 +63,7 @@ def prepare(job):
             "features": f if default_noise else None}
 
 
-def batches(copies, mean, std, rng, device):
+def batches(copies, mean, std, rng, device, cols):
     """Endless random crops, half of them with the teams swapped."""
     while True:
         xs, ys = [], []
@@ -73,7 +73,7 @@ def batches(copies, mean, std, rng, device):
             a = int(rng.integers(start, max(start + 1, stop - CROP)))
             b = min(stop, a + CROP)
             swap = rng.random() < 0.5
-            x = (item["x_swapped" if swap else "x"][a:b] - mean) / std
+            x = (item["x_swapped" if swap else "x"][a:b][:, cols] - mean) / std
             y = item["y"][a:b]
             if swap:
                 y = SWAP[y]
@@ -86,10 +86,11 @@ def batches(copies, mean, std, rng, device):
                torch.from_numpy(np.stack(ys)).to(device))
 
 
-def train(copies, steps, device, seed, label, config=None):
+def train(copies, steps, device, seed, label, config=None, cols=None):
     torch.manual_seed(seed)
     rng = np.random.default_rng(seed)
-    sample = np.vstack([c["x"][::50] for c in copies])
+    cols = np.arange(copies[0]["x"].shape[1]) if cols is None else np.asarray(cols)
+    sample = np.vstack([c["x"][::50][:, cols] for c in copies])
     mean = sample.mean(axis=0).astype(np.float32)
     std = (sample.std(axis=0) + 1e-3).astype(np.float32)
 
@@ -98,7 +99,7 @@ def train(copies, steps, device, seed, label, config=None):
     schedule = torch.optim.lr_scheduler.OneCycleLR(optimiser, max_lr=1e-3, total_steps=steps)
     net.train()
     started, running = time.time(), 0.0
-    for step, (x, y) in enumerate(batches(copies, mean, std, rng, device), start=1):
+    for step, (x, y) in enumerate(batches(copies, mean, std, rng, device, cols), start=1):
         loss = seqmodel.loss_fn(net(x), y)
         optimiser.zero_grad()
         loss.backward()
@@ -126,8 +127,7 @@ if __name__ == '__main__':
     parser.add_argument("--matches", type=int, default=0, help="use only the first N (testing)")
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--no-stress", action="store_true", help="calibrated noise only")
-    parser.add_argument("--seeds", type=int, default=3, help="base models per ensemble")
-    parser.add_argument("--no-wide", action="store_true", help="skip the wider model")
+    parser.add_argument("--seeds", type=int, default=3, help="models in the final file")
     parser.add_argument("--out", default=os.path.join(ROOT, "models", "sequence.pt"))
     args = parser.parse_args()
 
@@ -151,10 +151,11 @@ if __name__ == '__main__':
     print("prepared {} training copies, {} features ({:.0f} s)".format(
         len(train_data), len(names), time.time() - started), flush=True)
 
-    # Members of the ensemble: a few base models that differ only by seed, and one wider model.
-    plan = [("base", seqmodel.CONFIG, s) for s in range(args.seeds)]
-    if not args.no_wide:
-        plan.append(("wide", WIDE, 50))
+    # The comparison: the same network with and without the team-shape inputs.
+    everything = list(range(len(names)))
+    plain = [i for i, name in enumerate(names) if not name.startswith("shape_")]
+    plan = [("with team shape", everything), ("without team shape", plain)]
+    print("{} inputs with team shape, {} without".format(len(everything), len(plain)), flush=True)
 
     def spell(prob, item, team=12.0, dead=32.0):
         pred = decode.decode_match(prob, item["runs"], team, dead)
@@ -164,10 +165,10 @@ if __name__ == '__main__':
     for k in range(folds):
         copies = [c for i, group in enumerate(by_match) if i != k for c in group]
         probs = {v: [] for v in variants}
-        for tag, config, seed in plan:
-            net, mean, std = train(copies, args.cv_steps, device, seed=1000 * seed + k,
-                                   label="fold {} {} {}".format(k, tag, seed), config=config)
-            ckpt = {"names": names, "mean": mean, "std": std}
+        for tag, cols in plan:
+            net, mean, std = train(copies, args.cv_steps, device, seed=k,
+                                   label="fold {} {}".format(k, tag), cols=cols)
+            ckpt = {"names": [names[i] for i in cols], "mean": mean, "std": std}
             for j, variant in enumerate(variants):
                 item = test_data[k * len(variants) + j]
                 probs[variant].append(
@@ -175,33 +176,26 @@ if __name__ == '__main__':
             del net
         test = test_data[k * len(variants)]
         mine = probs[variants[0]]
-        base = mine[:args.seeds]
         print("held out {}".format(os.path.basename(paths[k])), flush=True)
-        results = {"single base model (seed 0)": spell(base[0], test)}
-        if len(base) > 1:
-            results["ensemble of {} base".format(len(base))] = spell(sum(base) / len(base), test)
-        if not args.no_wide:
-            results["single wide model"] = spell(mine[-1], test)
-            results["ensemble of all {}".format(len(mine))] = spell(sum(mine) / len(mine), test)
-        everything = sum(mine) / len(mine)
+        results = {tag: spell(prob, test) for (tag, _), prob in zip(plan, mine)}
+        results["average of both"] = spell(sum(mine) / len(mine), test)
         for team, dead in DECODERS:
-            results["all, viterbi {:g}/{:g}".format(team, dead)] = spell(everything, test, team, dead)
+            results["with team shape, viterbi {:g}/{:g}".format(team, dead)] = spell(
+                mine[0], test, team, dead)
         for name, s in results.items():
             print("  " + line(name, s), flush=True)
             totals.setdefault(name, []).append(s["spell"])
         for j, variant in enumerate(variants[1:], start=1):
             item = test_data[k * len(variants) + j]
-            both = {"single base": probs[variant][0],
-                    "ensemble of all": sum(probs[variant]) / len(probs[variant])}
-            for name, prob in both.items():
-                stress.setdefault("{:<20} {}".format(variant, name), []).append(
+            for (tag, _), prob in zip(plan, probs[variant]):
+                stress.setdefault("{:<20} {}".format(variant, tag), []).append(
                     spell(prob, item)["spell"])
 
     def table(title, rows):
         print()
         print(title)
         for name, values in rows.items():
-            print("  {:<40} {:.4f}  (min {:.4f}, max {:.4f})".format(
+            print("  {:<44} {:.4f}  (min {:.4f}, max {:.4f})".format(
                 name, float(np.mean(values)), float(np.min(values)), float(np.max(values))))
 
     if totals:
@@ -211,11 +205,11 @@ if __name__ == '__main__':
         table("same models under other noise (viterbi 12/32)", stress)
 
     members = []
-    for tag, config, seed in plan:
+    for seed in range(args.seeds):
         net, mean, std = train(train_data, args.steps, device, seed=99 + seed,
-                               label="final {} {}".format(tag, seed), config=config)
+                               label="final {}".format(seed))
         members.append({"state": net.cpu().state_dict(), "names": names, "mean": mean,
-                        "std": std, "config": config, "tag": tag})
+                        "std": std, "config": seqmodel.CONFIG, "tag": "shape"})
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     torch.save({"members": members}, args.out)
     print()

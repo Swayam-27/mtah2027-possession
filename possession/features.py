@@ -5,10 +5,11 @@ columns of a team (nearest, count within a radius, median speed), so identity sw
 fragmented tracks in the automatic tracking cannot break it.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
+from . import shape as team_shape
 from .match import HOME, AWAY
 
 MAX_BALL_SPEED = 45.0     # m/s; anything faster between two sightings is a false detection
@@ -39,6 +40,7 @@ class Features:
     spread_x: np.ndarray    # standard deviation of player positions along / across the pitch
     spread_y: np.ndarray
     drift: np.ndarray       # speed of the centroid of all players, m/s
+    shape: dict = field(default_factory=dict)   # per-team shape, see shape.py
 
 
 def remove_ball_teleports(bx, by, fps, max_speed=MAX_BALL_SPEED):
@@ -148,4 +150,5 @@ def compute(match):
                     d_home=d_home, d_away=d_away, n_home=n_home, n_away=n_away, out=out,
                     walk=clean(walk), n_players=n_players, fast=clean(fast),
                     speed_p90=clean(speed_p90), speed_mean=clean(speed_mean),
-                    spread_x=clean(spread_x), spread_y=clean(spread_y), drift=clean(drift))
+                    spread_x=clean(spread_x), spread_y=clean(spread_y), drift=clean(drift),
+                    shape=team_shape.compute(match, bx, by))

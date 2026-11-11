@@ -23,7 +23,7 @@ CONFIG = {"channels": 64, "layers": 10, "stages": 3, "dropout": 0.2}
 
 def frame_tensor(match, f, names=None):
     """([n_frames, n_features] float32, names) of per-frame measurements."""
-    base = tree_model.base_features(match, f)
+    base = tree_model.base_features(match, f, shape=True)
     names = names or sorted(base)
     return np.column_stack([base[name] for name in names]).astype(np.float32), names
 

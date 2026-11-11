@@ -14,7 +14,7 @@ from dataclasses import replace
 
 import numpy as np
 
-from . import engine
+from . import engine, shape as team_shape
 from .match import H, A, D
 
 OFFSETS = (5, 12, 25, 50)
@@ -57,10 +57,11 @@ def _since_until(flag, cap=250):
 
 def swap_teams(f):
     """The same features seen from the other side."""
-    return replace(f, d_home=f.d_away, d_away=f.d_home, n_home=f.n_away, n_away=f.n_home)
+    return replace(f, d_home=f.d_away, d_away=f.d_home, n_home=f.n_away, n_away=f.n_home,
+                   shape=team_shape.swap(f.shape))
 
 
-def base_features(match, f, rules=None):
+def base_features(match, f, rules=None, shape=False):
     """{name: [n_frames] float32}: what is happening on each frame, with no time context."""
     length, width = match.pitch
     rule_labels = engine.label_match(match, f, rules)
@@ -111,6 +112,9 @@ def base_features(match, f, rules=None):
     base["until_diff"] = base["until_on_away"] - base["until_on_home"]
     since, until = _since_until(base["seen"] > 0)
     base["since_seen"], base["until_seen"] = since, until
+    if shape:  # the sequence model's extra inputs; the tree model was trained without them
+        for key, values in f.shape.items():
+            base["shape_" + key] = values
     return base
 
 
