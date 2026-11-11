@@ -45,8 +45,9 @@ sequence model 0.78; the ordering of the methods is what we rely on from those.
 | Asset | Use |
 |---|---|
 | Tactical ATD (players + ball) | Used. The only input to the submitted pipeline |
-| Smart Tagging | Not used in the current version |
-| Homography, tactical video, broadcast video and ATD | Not used |
+| Smart Tagging | Not an input. Used as an independent check of the output on the real match (restart timing, team during tagged phases) |
+| Broadcast ATD | Not an input. Aligned to the tactical timeline automatically and used to learn how the ball position errs (airborne balls), which calibrates the degradation of the training matches |
+| Homography, tactical video, broadcast video | Not used |
 
 ## 3. Training data
 

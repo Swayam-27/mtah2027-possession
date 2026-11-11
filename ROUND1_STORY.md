@@ -179,6 +179,34 @@ Use the second camera's tracking (broadcast) to fill ball gaps, after lining up 
   any of the changed-damage tests (for example 0.674 against 0.660 with 55% of the ball
   hidden), so the four-model average is now what `models/sequence.pt` holds and what the
   submission is made from. Lesson: a bigger or repeated model is not where more score is.
+- **11 Nov** — Read the organisers' definition again before touching the "2-second rule" for
+  short possessions. Their answers come mechanically from corrected tracking, like our
+  practice matches, and their published average possession length (14.2 s on the public
+  5 minutes) is close to ours on the real match (14.8 s). So the rule stays.
+- **11 Nov** — Found a real gap in what the model is shown: it knew how all 22 players move
+  together, but nothing about each team separately, and not even which way each team attacks.
+  Added "team shape" inputs (for each team: how far up the pitch it is, how wide and long, is
+  it advancing or dropping, where its back line is, how many players are ahead of the ball).
+  On a practice match the team with the ball is clearly wider and moving forward.
+- **11 Nov** — Second camera (broadcast tracking). Wrote `scripts/broadcast_sync.py`, which
+  lines it up with the tactical tracking automatically (it found one time shift per half, and
+  players then sit within 0.3 m of each other in the two feeds). Result: it would fill only
+  about 9% of the frames where our ball is missing, so merging it in is not worth the risk.
+  But it taught us something better: when the two cameras disagree about the ball, it is
+  across the pitch and by metres. That is the mark of a ball in the air, which a single camera
+  draws on the ground further away than it really is. The practice matches know the ball's
+  real height, so this effect is now simulated in the practice exam (plus: very high balls
+  are lost, and most of what the ball does beyond the lines is not seen). The damaged practice
+  matches now match the real feed on every summary number we print.
+- **11 Nov** — Smart Tagging used as an independent check on the real match
+  (`scripts/tagging_check.py`), not as an input. Good news: 55 of 58 tagged restarts have one
+  of our dead-ball stretches ending right there, and during tagged build-up and progression
+  phases we give the ball to the tagged team 91-92% of the time. Bad news: after corners we
+  give the first possession to the team taking it only 8 times in 12, and after goal kicks 5
+  in 8. The model could not know better, because it did not know which way teams attack; the
+  team-shape inputs should fix that. We will re-run this check on the next model.
+- **Next:** Kaggle run comparing the network with and without team shape, both trained on the
+  improved practice exam.
 - **Still unknown:** the real score. The practice exam now resembles the real tracking much
   more closely, but it is still other matches with simulated damage.
 
