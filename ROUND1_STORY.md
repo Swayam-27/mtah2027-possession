@@ -142,10 +142,24 @@ Use the second camera's tracking (broadcast) to fill ball gaps, after lining up 
   the tree model found too few. It is now the default in `scripts/run_round1.py`; the tree
   model stays as a fallback (`--method model`). Not yet checked: how the sequence model
   holds up under noise it was not trained on.
-- **Ready for the real data.** When it arrives: run `scripts/atd_stats.py`, share the summary
-  numbers, adjust the practice exam's noise if needed, then run `scripts/run_round1.py`.
-- **Still unknown until the real data arrives:** how closely the practice exam's noise matches
-  the real tracking, and so how much of the 0.78 carries over.
+- **11 Nov** — The real tracking arrived (only the two tracking files are needed; videos not
+  downloaded). Compared its summary numbers with our practice exam. The share of missing ball
+  matched (41%), but the character of the damage did not:
+  - The real feed is **smooth**, not jittery. I had been adding shake that is not there.
+  - The ball goes missing in **long stretches** (typically 10 seconds, mostly during
+    stoppages), not in short flickers. Short losses are filled in by the tracker with straight
+    lines.
+  - The ball is drawn **further from the players' feet** than in the practice matches, so
+    "who is nearest" is less reliable than I assumed.
+  - Players drop out for long spells, not short ones.
+- **11 Nov** — Rebuilt the practice exam's damage to match all of the above, and checked the
+  summary numbers of a damaged practice match now sit close to the real ones. The models
+  trained on the old damage must be retrained on the new one (next Kaggle run). That run also
+  scores each model under several other kinds of damage, so we see how fragile the score is.
+- **Next:** retrain on Kaggle, put the new `sequence.pt` in `models/`, then run
+  `scripts/run_round1.py` to write the submission and check it with the official validator.
+- **Still unknown:** the real score. The practice exam now resembles the real tracking much
+  more closely, but it is still other matches with simulated damage.
 
 ## What is in the folder
 

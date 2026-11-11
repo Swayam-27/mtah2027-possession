@@ -60,6 +60,19 @@ def tracking_stats(match):
     step = np.hypot(np.diff(match.bx), np.diff(match.by)) * fps
     out["ball speed, m/s (p10 p25 p50 p75 p90 p99)"] = _pct(step[~np.isnan(step)])
 
+    # A tracker that fills short losses draws straight lines at constant speed. How much of the
+    # seen ball is exactly that tells us how much of it is filled in rather than detected.
+    bend = np.hypot(second, match.by[2:] - 2 * match.by[1:-1] + match.by[:-2])
+    pace = step[1:]
+    ok = ~np.isnan(bend) & ~np.isnan(pace)
+    out["ball bend per frame, metres (p10 p25 p50 p75 p90 p99)"] = _pct(bend[ok])
+    out["ball exactly still (share of seen)"] = "{:.3f}".format(
+        float((pace[ok] < 0.01).mean()) if ok.any() else 0.0)
+    for limit in (0.001, 0.01):
+        straight = _stretches(ok & (bend < limit) & (pace >= 0.5))
+        out["ball moving dead straight, bend < {} m (share of seen)".format(limit)] =             "{:.3f}".format(float(straight.sum()) / max(1, int(ok.sum())))
+        out["  ... stretch length, frames, bend < {} m (p10 p25 p50 p75 p90 p99)".format(limit)] =             _pct(straight)
+
     # How the ball behaves when it is seen: a ball that is often motionless or often right at a
     # player's feet says a lot about what the feed shows during stoppages.
     step_rows = np.hypot(match.bx[rows] - match.bx[rows - 1], match.by[rows] - match.by[rows - 1]) * fps
@@ -96,6 +109,8 @@ def tracking_stats(match):
     second = match.px[2:] - 2 * match.px[1:-1] + match.px[:-2]
     out["player jitter proxy, metres (median |2nd difference|)"] = "{:.4f}".format(
         float(np.nanmedian(np.abs(second[::10]))))
+    bend = np.hypot(second[::10], (match.py[2:] - 2 * match.py[1:-1] + match.py[:-2])[::10])
+    out["player bend per frame, metres (p10 p25 p50 p75 p90 p99)"] = _pct(bend[~np.isnan(bend)])
 
     near = np.hypot(match.px[rows] - match.bx[rows, None], match.py[rows] - match.by[rows, None])
     nearest = np.nanmin(np.where(np.isnan(near), np.inf, near), axis=1)

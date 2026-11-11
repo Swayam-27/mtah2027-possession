@@ -52,9 +52,10 @@ if __name__ == '__main__':
                       "!python scripts/prepare_external.py\n"
                       "!rm -rf external"))
     cells.append(markdown("## 2. Train\n\nFirst a leave-one-match-out test (the printed "
-                          "`mean spellF1` is the number to compare with the tree model's 0.68), "
+                          "`mean spellF1` is the number that matters), "
                           "then the final model on all seven matches."))
-    cells.append(code("!python scripts/train_seq.py --out /kaggle/working/sequence.pt"))
+    cells.append(code("!python scripts/train_seq.py --copies 8 --cv-steps 4000 --steps 8000 "
+                      "--out /kaggle/working/sequence.pt"))
     cells.append(code("!ls -la /kaggle/working/sequence.pt"))
 
     notebook = {"cells": cells, "nbformat": 4, "nbformat_minor": 5,

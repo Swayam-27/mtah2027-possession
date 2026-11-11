@@ -31,15 +31,28 @@ MIN_CONTROL = 50
 CROP = 4096
 BATCH = 8
 SWAP = np.array([A, H, D, 3], dtype=np.int64)
+DECODERS = ((2.0, 2.0), (4.0, 8.0), (8.0, 16.0), (12.0, 32.0), (16.0, 48.0))
+# Held-out matches are scored under the calibrated noise and under a few others, to see how
+# much the score depends on the noise guess being right.
+STRESS = {
+    "calibrated": Noise(),
+    "ball unseen 55%": Noise(ball_missing=0.55),
+    "no position error": Noise(ball_drift=0.0),
+    "big position error": Noise(ball_drift=1.2),
+    "short gaps, jitter": Noise(ball_mean_gap=40.0, ball_fill=0, ball_smooth=1, ball_jitter=0.15,
+                                ball_drift=0.0, player_mean_gap=30.0, player_fill=0,
+                                player_smooth=1, player_jitter=0.10, dead_hidden=0.25),
+}
 
 
 def prepare(job):
     """One degraded copy of one match: frame tensors for both team orderings, labels, runs."""
-    path, seed, default_noise = job
+    path, seed, variant = job
+    default_noise = variant is not None
     match = Match.load(path)
     match.labels = relabel.controlled(match.labels, match.runs, MIN_CONTROL)
     truth = graded_truth(match)
-    noise = Noise() if default_noise else random_noise(np.random.default_rng(1000 + seed))
+    noise = STRESS[variant] if default_noise else random_noise(np.random.default_rng(1000 + seed))
     noisy = degrade(match, noise, seed=seed)
     f = features.compute(noisy)
     x, names = seqmodel.frame_tensor(noisy, f)
@@ -111,6 +124,7 @@ if __name__ == '__main__':
     parser.add_argument("--folds", type=int, default=7)
     parser.add_argument("--matches", type=int, default=0, help="use only the first N (testing)")
     parser.add_argument("--workers", type=int, default=4)
+    parser.add_argument("--no-stress", action="store_true", help="calibrated noise only")
     parser.add_argument("--out", default=os.path.join(ROOT, "models", "sequence.pt"))
     args = parser.parse_args()
 
@@ -122,8 +136,10 @@ if __name__ == '__main__':
           flush=True)
 
     started = time.time()
-    train_jobs = [(p, 100 * c + i, False) for i, p in enumerate(paths) for c in range(args.copies)]
-    test_jobs = [(p, 500 + i, True) for i, p in enumerate(paths)][:args.folds]
+    variants = list(STRESS)[:1 if args.no_stress else None]
+    folds = min(args.folds, len(paths))
+    train_jobs = [(p, 100 * c + i, None) for i, p in enumerate(paths) for c in range(args.copies)]
+    test_jobs = [(p, 500 + i, v) for i, p in enumerate(paths[:folds]) for v in variants]
     with Pool(args.workers) as pool:
         prepared = pool.map(prepare, train_jobs + test_jobs, chunksize=1)
     train_data, test_data = prepared[:len(train_jobs)], prepared[len(train_jobs):]
@@ -133,18 +149,25 @@ if __name__ == '__main__':
         len(train_data), len(names), time.time() - started), flush=True)
 
     totals = {}
-    for k in range(min(args.folds, len(paths))):
+    stress = {}
+    for k in range(folds):
         copies = [c for i, group in enumerate(by_match) if i != k for c in group]
         net, mean, std = train(copies, args.cv_steps, device, seed=k, label="fold {}".format(k))
-        test = test_data[k]
         ckpt = {"names": names, "mean": mean, "std": std}
+        for j, variant in enumerate(variants[1:], start=1):
+            other = test_data[k * len(variants) + j]
+            pred = decode.decode_match(
+                seqmodel.predict(net, ckpt, other["match"], other["features"], device),
+                other["runs"], 12.0, 32.0)
+            stress.setdefault(variant, []).append(score(other["y"].astype(np.int8), pred)["spell"])
+        test = test_data[k * len(variants)]
         prob = seqmodel.predict(net, ckpt, test["match"], test["features"], device)
         print("held out {}".format(os.path.basename(paths[k])), flush=True)
         argmax = np.full(len(prob), 3, dtype=np.int8)
         for a, b in test["runs"]:
             argmax[a:b] = prob[a:b].argmax(axis=1)
         results = {"sequence argmax": argmax}
-        for team, dead in ((2.0, 2.0), (4.0, 8.0), (8.0, 16.0), (12.0, 32.0)):
+        for team, dead in DECODERS:
             results["sequence viterbi {:g}/{:g}".format(team, dead)] = decode.decode_match(
                 prob, test["runs"], team, dead)
         for name, pred in results.items():
@@ -153,9 +176,16 @@ if __name__ == '__main__':
             totals.setdefault(name, []).append(s["spell"])
 
     if totals:
-        print("\nmean spellF1 over {} held-out matches (tree model: 0.68)".format(
+        print("\nmean spellF1 over {} held-out matches, calibrated noise".format(
             len(next(iter(totals.values())))))
         for name, values in totals.items():
+            print("  {:<32} {:.4f}  (min {:.4f}, max {:.4f})".format(
+                name, float(np.mean(values)), float(np.min(values)), float(np.max(values))))
+
+    if stress:
+        print()
+        print("same models under other noise (viterbi 12/32)")
+        for name, values in stress.items():
             print("  {:<32} {:.4f}  (min {:.4f}, max {:.4f})".format(
                 name, float(np.mean(values)), float(np.min(values)), float(np.max(values))))
 

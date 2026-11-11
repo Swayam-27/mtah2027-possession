@@ -46,5 +46,7 @@ if __name__ == '__main__':
 
     cached = sorted(glob.glob(os.path.join(ROOT, "cache", "DFL-*.npz")))
     if cached:
+        external = Match.load(cached[0])
         print_stats("DEGRADED EXTERNAL MATCH (what the benchmark currently simulates)",
-                    tracking_stats(degrade(Match.load(cached[0]))))
+                    tracking_stats(degrade(external)))
+        print_stats("CLEAN EXTERNAL MATCH (before any degradation)", tracking_stats(external))

@@ -15,15 +15,17 @@ there. **The competition match data must never be uploaded to Kaggle.**
    leave-one-match-out test and then trains the final model. Expect 1 to 2 hours.
    For a run that keeps going with the browser closed, use **Save Version → Save & Run All**.
 5. When it finishes:
-   - Copy the block of text that starts with `mean spellF1 over 7 held-out matches`.
-   - Download `sequence.pt` from the **Output** panel.
+   - Copy the text from `mean spellF1 over 7 held-out matches` down to the end.
+   - Download `sequence.pt` from the **Output** panel. If the browser saves it as
+     `sequence.zip`, just rename it back to `sequence.pt` (do not unzip it).
 6. Put `sequence.pt` into the `models/` folder of the project and share the copied scores.
 
 ## What the scores mean
 
-The line to look at is `sequence viterbi ...` under `mean spellF1`. The current tree model
-scores **0.68** on the same test. The sequence model replaces or joins it only if it is higher
-by more than about 0.04, which is the scorer's noise level.
+The lines to look at are `sequence viterbi ...` under `mean spellF1`: scores on matches the
+model never saw, damaged to look like the real tracking. The block after it shows the same
+models under other kinds of damage, to check the score does not depend on one noise guess.
+Differences under about 0.04 are within the scorer's noise.
 
 ## Rebuilding the notebook
 

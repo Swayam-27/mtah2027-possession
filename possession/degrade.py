@@ -1,9 +1,14 @@
 """Make clean external tracking look like the competition's automatic tracking.
 
 The external matches are corrected tracking: ball on every frame, every player on every frame.
-The competition ATD is not: the ball is unseen on ~41% of graded frames, players drop in and
-out, positions jitter and the ball detector sometimes fires on the wrong thing. A method tuned on
-clean data would be tuned for a different problem, so every external match is degraded first.
+The competition ATD is not: the ball is unseen on ~41% of graded frames and players drop in and
+out. A method tuned on clean data would be tuned for a different problem, so every external
+match is degraded first.
+
+The defaults were calibrated on 11 Nov 2026 against summary statistics of the competition feed
+(scripts/atd_stats.py). That feed is smoothed, not jittery: short losses of the ball or of a
+player are filled in by the tracker, so what remains missing is long stretches (median about
+10 s for the ball), and the seen ball often moves in straight filled-in lines.
 
 Ball loss is not uniform. It is lost when it is in the air, when it is in a crowd and when the
 ball is out of play, so the loss process is a two-state chain whose rates depend on those.
@@ -20,16 +25,22 @@ from .match import D, X
 @dataclass
 class Noise:
     ball_missing: float = 0.41      # target share of unseen ball frames inside the runs
-    ball_mean_gap: float = 40.0     # mean length of an unseen stretch, frames, in open play
+    ball_mean_gap: float = 150.0    # mean length of a raw loss, frames, in open play
+    ball_fill: int = 75             # losses up to this long are filled with a straight line
+    ball_smooth: int = 9            # moving-average window on the seen ball, frames
     air_factor: float = 4.0         # how much likelier the ball is lost above head height
     crowd_factor: float = 2.5       # ... with 3+ players within 3 m
+    feet_factor: float = 2.5        # ... with a player within 1 m (ball hidden by the body)
     dead_factor: float = 3.0        # ... while the ball is out of play
-    ball_jitter: float = 0.15       # metres, per-frame gaussian
-    ball_false: float = 0.003       # share of seen frames replaced by a false detection
+    ball_jitter: float = 0.01       # metres, per-frame gaussian
+    ball_drift: float = 0.6         # metres, slowly wandering position error (per axis)
+    ball_false: float = 0.0015      # share of seen frames replaced by a false detection
     player_missing: float = 0.07    # share of player observations dropped
-    player_mean_gap: float = 30.0   # mean length of a player dropout, frames
-    player_jitter: float = 0.10     # metres
-    dead_hidden: float = 0.25       # share of stoppages where the ball is never seen at all
+    player_mean_gap: float = 150.0  # mean length of a raw player dropout, frames
+    player_fill: int = 60           # dropouts up to this long are filled (player stays tracked)
+    player_jitter: float = 0.003    # metres
+    player_smooth: int = 7          # moving-average window on player positions, frames
+    dead_hidden: float = 0.45       # share of stoppages where the ball is never seen at all
 
 
 def random_noise(rng):
@@ -40,16 +51,22 @@ def random_noise(rng):
     """
     return Noise(
         ball_missing=float(rng.uniform(0.30, 0.50)),
-        ball_mean_gap=float(rng.uniform(20.0, 80.0)),
+        ball_mean_gap=float(rng.uniform(60.0, 350.0)),
+        ball_fill=int(rng.integers(25, 126)),
+        ball_smooth=int(rng.integers(1, 16)),
         air_factor=float(rng.uniform(2.0, 6.0)),
         crowd_factor=float(rng.uniform(1.5, 4.0)),
+        feet_factor=float(rng.uniform(1.0, 4.0)),
         dead_factor=float(rng.uniform(1.5, 5.0)),
-        ball_jitter=float(rng.uniform(0.05, 0.30)),
-        ball_false=float(rng.uniform(0.0, 0.006)),
+        ball_jitter=float(rng.uniform(0.0, 0.05)),
+        ball_drift=float(rng.uniform(0.0, 1.2)),
+        ball_false=float(rng.uniform(0.0, 0.004)),
         player_missing=float(rng.uniform(0.03, 0.12)),
-        player_mean_gap=float(rng.uniform(15.0, 60.0)),
-        player_jitter=float(rng.uniform(0.05, 0.20)),
-        dead_hidden=float(rng.uniform(0.10, 0.60)))
+        player_mean_gap=float(rng.uniform(60.0, 400.0)),
+        player_fill=int(rng.integers(20, 101)),
+        player_jitter=float(rng.uniform(0.0, 0.03)),
+        player_smooth=int(rng.integers(1, 12)),
+        dead_hidden=float(rng.uniform(0.15, 0.75)))
 
 
 def _chain(rng, lose, regain):
@@ -75,6 +92,7 @@ def _ball_missing(match, noise, rng, forced):
         risk[np.nan_to_num(match.bz) > 2.0] *= noise.air_factor
     dist = np.hypot(match.px - match.bx[:, None], match.py - match.by[:, None])
     risk[(np.nan_to_num(dist, nan=np.inf) < 3.0).sum(axis=1) >= 3] *= noise.crowd_factor
+    risk[(np.nan_to_num(dist, nan=np.inf) < 1.0).any(axis=1)] *= noise.feet_factor
     if match.labels is not None:
         risk[match.labels == D] *= noise.dead_factor
 
@@ -90,8 +108,9 @@ def _ball_missing(match, noise, rng, forced):
     for _ in range(18):
         mid = np.sqrt(low * high)
         lose = np.clip(mid * np.sqrt(risk), 0.0, 1.0)
-        missing = _chain(np.random.default_rng(seed), lose, regain)
-        if (missing | forced)[in_runs].mean() > noise.ball_missing:
+        missing = _long_only(_chain(np.random.default_rng(seed), lose, regain) | forced,
+                             noise.ball_fill)
+        if missing[in_runs].mean() > noise.ball_missing:
             high = mid
         else:
             low = mid
@@ -101,6 +120,50 @@ def _ball_missing(match, noise, rng, forced):
 def _segments(mask):
     edges = np.diff(np.concatenate(([0], mask.astype(np.int8), [0])))
     return zip(np.flatnonzero(edges == 1).tolist(), np.flatnonzero(edges == -1).tolist())
+
+
+def _long_only(mask, shortest):
+    """Drop the True stretches of at most `shortest` frames: the tracker fills those in."""
+    edges = np.diff(np.concatenate(([0], mask.astype(np.int8), [0])))
+    starts, stops = np.flatnonzero(edges == 1), np.flatnonzero(edges == -1)
+    short = (stops - starts) <= shortest
+    delta = np.zeros(len(mask) + 1, dtype=np.int32)
+    np.add.at(delta, starts[short], 1)
+    np.add.at(delta, stops[short], -1)
+    return mask & (np.cumsum(delta[:-1]) == 0)
+
+
+def _fill_line(values, keep_missing):
+    """Straight line through every missing frame that is not in `keep_missing`."""
+    known = ~np.isnan(values)
+    if known.sum() < 2:
+        return values
+    index = np.arange(len(values))
+    filled = np.interp(index, index[known], values[known]).astype(values.dtype)
+    filled[keep_missing] = np.nan
+    return filled
+
+
+def _drift(rng, n, size, fps):
+    """Smooth wandering error with standard deviation `size`, changing over a few seconds."""
+    if size <= 0:
+        return np.zeros(n, dtype=np.float32)
+    window = int(3 * fps)
+    walk = np.convolve(rng.normal(0.0, 1.0, n + window), np.hanning(window), mode="same")[:n]
+    return (walk / walk.std() * size).astype(np.float32)
+
+
+def _smooth(values, window):
+    """Moving average that ignores missing frames and keeps them missing."""
+    if window <= 1:
+        return values
+    known = ~np.isnan(values)
+    kernel = np.ones(window)
+    total = np.convolve(np.where(known, values, 0.0), kernel, mode="same")
+    count = np.convolve(known.astype(np.float64), kernel, mode="same")
+    out = (total / np.maximum(count, 1.0)).astype(values.dtype)
+    out[~known] = np.nan
+    return out
 
 
 def simulate_dead_ball(match, noise, rng):
@@ -163,19 +226,29 @@ def degrade(match, noise=None, seed=0):
     missing = _ball_missing(match, noise, rng, np.isnan(dead_x))
     bx = dead_x + rng.normal(0.0, noise.ball_jitter, n).astype(np.float32)
     by = dead_y + rng.normal(0.0, noise.ball_jitter, n).astype(np.float32)
+    bx += _drift(rng, n, noise.ball_drift, match.fps)
+    by += _drift(rng, n, noise.ball_drift, match.fps)
     false = rng.random(n) < noise.ball_false
     false &= ~np.isnan(bx)
     bx[false] = rng.uniform(0.0, length, int(false.sum()))
     by[false] = rng.uniform(0.0, width, int(false.sum()))
-    bx[missing] = np.nan
-    by[missing] = np.nan
+    # `missing` holds only the long losses. Everything shorter is drawn as a straight line
+    # between the sightings on either side, which is what the competition tracker does.
+    bx[np.isnan(dead_x)] = np.nan
+    by[np.isnan(dead_x)] = np.nan
+    lost = _chain(rng, np.full(n, 0.01), np.full(n, 0.10)) & ~missing
+    bx[lost], by[lost] = np.nan, np.nan
+    bx = _smooth(_fill_line(bx, missing), noise.ball_smooth)
+    by = _smooth(_fill_line(by, missing), noise.ball_smooth)
 
     px = match.px + rng.normal(0.0, noise.player_jitter, (n, slots)).astype(np.float32)
     py = match.py + rng.normal(0.0, noise.player_jitter, (n, slots)).astype(np.float32)
     regain = np.full(n, 1.0 / noise.player_mean_gap)
     lose = np.full(n, noise.player_missing / (1.0 - noise.player_missing) / noise.player_mean_gap)
     for slot in range(slots):
-        gone = _chain(rng, lose, regain)
+        gone = _long_only(_chain(rng, lose, regain), noise.player_fill)
+        px[:, slot] = _smooth(px[:, slot], noise.player_smooth)
+        py[:, slot] = _smooth(py[:, slot], noise.player_smooth)
         px[gone, slot] = np.nan
         py[gone, slot] = np.nan
 
