@@ -31,8 +31,12 @@ pipeline has four stages:
    metric punishes as invented possessions.
 
 Why this rather than rules alone: on the external benchmark (leave-one-match-out over 7
-matches) the baseline scores spellF1 0.30, the rule engine 0.50, the tree model 0.68 and the
-sequence model 0.78 (worst match 0.73, best 0.84).
+matches), with the degradation calibrated to summary statistics of the competition tracking,
+the sequence model scores spellF1 0.74 (worst match 0.70, best 0.80). The same models score
+0.66 with the ball unseen on 55% of frames, 0.70 with twice the ball position error and 0.74
+under a quite different noise model (short gaps, jitter). Under an earlier, uncalibrated
+degradation the baseline scored 0.30, the rule engine 0.50, the tree model 0.68 and the
+sequence model 0.78; the ordering of the methods is what we rely on from those.
 
 ## 2. Assets used and dropped
 

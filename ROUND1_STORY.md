@@ -159,8 +159,19 @@ Use the second camera's tracking (broadcast) to fill ball gaps, after lining up 
 - **11 Nov** — Second Kaggle run done: the sequence model retrained on the realistic damage
   is in `models/sequence.pt` (the tree model was retrained too, as the fallback). Wrote the
   submission `outputs/Chandal Chowkdi.csv` with it: the official validator accepts it and two
-  runs give the identical file. Its held-out practice scores are in the Kaggle log and still
-  have to be written down here.
+  runs give the identical file.
+- **11 Nov** — Honest practice score of the retrained model, on matches it never saw:
+
+  | Practice damage | spellF1 (mean of 7) | worst | best |
+  |---|---|---|---|
+  | Matched to the real tracking | **0.74** | 0.70 | 0.80 |
+  | Ball hidden on 55% of frames instead of 41% | 0.66 | 0.61 | 0.73 |
+  | Ball drawn twice as far off its true spot | 0.70 | 0.67 | 0.73 |
+  | Ball drawn exactly on its true spot | 0.74 | 0.71 | 0.80 |
+  | The old damage (short gaps, shaky positions) | 0.74 | 0.72 | 0.78 |
+
+  Lower than the earlier 0.78 because the realistic damage is harder, but it holds up when
+  the damage is changed. The decoder settings (12/32) were confirmed again.
 - **Still unknown:** the real score. The practice exam now resembles the real tracking much
   more closely, but it is still other matches with simulated damage.
 
