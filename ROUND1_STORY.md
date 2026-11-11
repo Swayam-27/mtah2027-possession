@@ -172,6 +172,13 @@ Use the second camera's tracking (broadcast) to fill ball gaps, after lining up 
 
   Lower than the earlier 0.78 because the realistic damage is harder, but it holds up when
   the damage is changed. The decoder settings (12/32) were confirmed again.
+- **11 Nov** — Third Kaggle run: tried averaging several models (three copies of the network
+  with different random starts, plus one larger network). On unseen practice matches:
+  single network 0.744, three averaged 0.746, larger network alone 0.733, all four averaged
+  0.749. The gain is tiny, inside the scorer's noise, but the average was never worse under
+  any of the changed-damage tests (for example 0.674 against 0.660 with 55% of the ball
+  hidden), so the four-model average is now what `models/sequence.pt` holds and what the
+  submission is made from. Lesson: a bigger or repeated model is not where more score is.
 - **Still unknown:** the real score. The practice exam now resembles the real tracking much
   more closely, but it is still other matches with simulated damage.
 

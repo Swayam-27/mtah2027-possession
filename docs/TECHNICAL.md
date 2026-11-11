@@ -25,14 +25,16 @@ pipeline has four stages:
    3 stages of 10 dilated 1-D convolution layers, 64 channels, about 0.5 M parameters) that
    reads the per-frame features of the whole half and outputs H/A/D probabilities per frame.
    Trained with cross-entropy plus a smoothness term, on GPU, on the external matches only.
-   Predictions are averaged over the two team orderings.
+   Four such networks are averaged: three that differ only in their random seed and one
+   wider (96 channels, 11 layers). Predictions are also averaged over the two team orderings.
 5. **Decoding.** Viterbi over the per-frame probabilities with a fixed price for a change of
    team and a higher one for a dead/alive change. This removes flicker, which the ranking
    metric punishes as invented possessions.
 
 Why this rather than rules alone: on the external benchmark (leave-one-match-out over 7
 matches), with the degradation calibrated to summary statistics of the competition tracking,
-the sequence model scores spellF1 0.74 (worst match 0.70, best 0.80). The same models score
+a single sequence network scores spellF1 0.74 (worst match 0.70, best 0.80) and the
+four-network average 0.75 (worst 0.72, best 0.80). The same models score
 0.66 with the ball unseen on 55% of frames, 0.70 with twice the ball position error and 0.74
 under a quite different noise model (short gaps, jitter). Under an earlier, uncalibrated
 degradation the baseline scored 0.30, the rule engine 0.50, the tree model 0.68 and the
