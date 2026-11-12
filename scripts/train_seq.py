@@ -85,7 +85,7 @@ def batches(copies, mean, std, rng, device, cols):
                torch.from_numpy(np.stack(ys)).to(device))
 
 
-def train(copies, steps, device, seed, label, config=None, cols=None):
+def train(copies, steps, device, seed, label, config=None, cols=None, smooth=0.15, boost=1.0):
     torch.manual_seed(seed)
     rng = np.random.default_rng(seed)
     cols = np.arange(copies[0]["x"].shape[1]) if cols is None else np.asarray(cols)
@@ -99,7 +99,7 @@ def train(copies, steps, device, seed, label, config=None, cols=None):
     net.train()
     started, running = time.time(), 0.0
     for step, (x, y) in enumerate(batches(copies, mean, std, rng, device, cols), start=1):
-        loss = seqmodel.loss_fn(net(x), y)
+        loss = seqmodel.loss_fn(net(x), y, smooth=smooth, boost=boost)
         optimiser.zero_grad()
         loss.backward()
         torch.nn.utils.clip_grad_norm_(net.parameters(), 1.0)
@@ -152,36 +152,41 @@ if __name__ == '__main__':
     print("prepared {} training copies, {} features ({:.0f} s)".format(
         len(train_data), len(names), time.time() - started), flush=True)
 
-    # The comparison: the same network trained on DFL matches only, and on DFL plus Metrica.
-    # Every match is held out in turn; the held-out match is never in either training set.
-    plan = [("DFL only", {"DFL"}), ("DFL + Metrica", {"DFL", "Metrica"})]
+    # The comparison: three ways of training the same network on all the other matches.
+    # "fewer merges" and "sharper changes" aim at the possessions we still merge together.
+    plan = [("current", 0.15, 1.0), ("less smoothing", 0.05, 1.0), ("sharper changes", 0.15, 3.0)]
 
     def spell(prob, item, team=12.0, dead=32.0):
         pred = decode.decode_match(prob, item["runs"], team, dead)
         return score(item["y"].astype(np.int8), pred)
 
+    # Held-out probabilities are saved so decoders can be compared later without a GPU.
+    oof = {}
     totals, stress = {}, {}
     for k in range(len(paths)):
         print("held out {} ({})".format(os.path.basename(paths[k]), source[k]), flush=True)
-        for tag, allowed in plan:
-            copies = [c for i, group in enumerate(by_match)
-                      if i != k and source[i] in allowed for c in group]
-            if not copies:
-                continue
+        copies = [c for i, group in enumerate(by_match) if i != k for c in group]
+        for tag, smooth, boost in plan:
             net, mean, std = train(copies, args.cv_steps, device, seed=k,
-                                   label="fold {} {}".format(k, tag))
+                                   label="fold {} {}".format(k, tag), smooth=smooth, boost=boost)
             ckpt = {"names": names, "mean": mean, "std": std}
             for j, variant in enumerate(variants):
                 item = test_data[k * len(variants) + j]
                 prob = seqmodel.predict(net, ckpt, item["match"], item["features"], device)
+                name = os.path.basename(paths[k])[:-4]
+                oof["{}|{}|{}".format(name, tag, variant)] = prob.astype(np.float16)
+                oof["{}|y".format(name)] = item["y"].astype(np.int8)
+                oof["{}|runs".format(name)] = np.array(item["runs"], dtype=np.int64)
                 s = spell(prob, item)
-                key = "{:<8} test, {:<14} {}".format(source[k], tag, variant)
+                key = "{:<8} test, {:<16} {}".format(source[k], tag, variant)
                 if j == 0:
                     print("  " + line(tag, s), flush=True)
                     totals.setdefault(key, []).append(s["spell"])
                 else:
                     stress.setdefault(key, []).append(s["spell"])
             del net
+        np.savez_compressed(os.path.join(os.path.dirname(os.path.abspath(args.out)), "oof.npz"),
+                            **oof)
 
     def table(title, rows):
         print()
@@ -196,16 +201,22 @@ if __name__ == '__main__':
     if stress:
         table("same models under other noise (viterbi 12/32)", stress)
 
-    # Final models on every match, DFL and Metrica together. If the comparison above says
-    # Metrica does not help, keep the previous model file instead of this one.
+    # Final models on every match, with whichever way of training scored best on the held-out
+    # DFL matches (they are the closest to how the competition's answers were made).
+    def dfl_mean(tag):
+        return float(np.mean(totals["{:<8} test, {:<16} {}".format("DFL", tag, variants[0])]))
+    best = max(plan, key=lambda p: dfl_mean(p[0])) if totals else plan[0]
+    print()
+    print("final models trained the '{}' way".format(best[0]), flush=True)
     members = []
     for seed in range(args.seeds):
         net, mean, std = train(train_data, args.steps, device, seed=99 + seed,
-                               label="final {}".format(seed))
+                               label="final {}".format(seed), smooth=best[1], boost=best[2])
         members.append({"state": net.cpu().state_dict(), "names": names, "mean": mean,
-                        "std": std, "config": seqmodel.CONFIG, "tag": "shape"})
+                        "std": std, "config": seqmodel.CONFIG, "tag": "shape",
+                        "training": best[0]})
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     torch.save({"members": members}, args.out)
     print()
-    print("saved {} with {} models trained on DFL + Metrica ({:.0f} s total)".format(
-        args.out, len(members), time.time() - started))
+    print("saved {} with {} models, trained the '{}' way ({:.0f} s total)".format(
+        args.out, len(members), best[0], time.time() - started))

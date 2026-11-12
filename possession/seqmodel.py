@@ -68,11 +68,29 @@ class Net(nn.Module):
         return out
 
 
-def loss_fn(stage_logits, target, smooth=0.15):
-    """Cross-entropy on graded frames plus a penalty on jumpy frame-to-frame predictions."""
+def boundary_weights(target, boost, radius=25):
+    """Per-frame weight: `boost` within `radius` frames of a change of label, 1 elsewhere."""
+    graded = target != 3
+    change = torch.zeros_like(target, dtype=torch.float32)
+    change[:, 1:] = ((target[:, 1:] != target[:, :-1]) & graded[:, 1:] & graded[:, :-1]).float()
+    near = F.max_pool1d(change[:, None], 2 * radius + 1, stride=1, padding=radius)[:, 0]
+    return (1.0 + (boost - 1.0) * near) * graded.float()
+
+
+def loss_fn(stage_logits, target, smooth=0.15, boost=1.0):
+    """Cross-entropy on graded frames plus a penalty on jumpy frame-to-frame predictions.
+
+    With boost > 1 the frames around every change of possession or of dead/alive count more:
+    those are the frames that decide whether a possession is found, and they are few.
+    """
+    weight = boundary_weights(target, boost) if boost != 1.0 else None
     total = 0.0
     for logits in stage_logits:
-        total = total + F.cross_entropy(logits, target, ignore_index=3)
+        if weight is None:
+            total = total + F.cross_entropy(logits, target, ignore_index=3)
+        else:
+            per = F.cross_entropy(logits, target.clamp(max=2), reduction="none")
+            total = total + (per * weight).sum() / weight.sum().clamp(min=1.0)
         log_prob = F.log_softmax(logits, dim=1)
         jump = (log_prob[:, :, 1:] - log_prob[:, :, :-1].detach()) ** 2
         total = total + smooth * torch.clamp(jump, max=16.0).mean()

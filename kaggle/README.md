@@ -14,10 +14,11 @@ there, plus Metrica's three public sample games. **The competition match data mu
 4. Click **Save Version → Save & Run All (Commit)**. This runs in the background, so the
    browser can be closed. It downloads the DFL matches (2.6 GB) and the Metrica sample
    games (0.2 GB), converts them, runs a leave-one-match-out test (the network trained on DFL
-   only against DFL plus Metrica), then trains the final models. Expect about 3.5 hours. When it is done, open the saved version to see the log and output.
+   only against DFL plus Metrica), then trains the final models. Expect about 4.5 hours. When it is done, open the saved version to see the log and output.
 5. When it finishes:
    - Copy the text from `mean spellF1 over 7 held-out matches` down to the end.
-   - Download `sequence.pt` from the **Output** panel. If the browser saves it as
+   - Download `sequence.pt` and `oof.npz` (held-out predictions, for tuning the decoder
+     without a GPU) from the **Output** panel. If the browser saves it as
      `sequence.zip`, just rename it back to `sequence.pt` (do not unzip it).
 6. Put `sequence.pt` into the `models/` folder of the project and share the copied scores.
 
