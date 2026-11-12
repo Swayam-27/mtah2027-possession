@@ -230,6 +230,19 @@ Use the second camera's tracking (broadcast) to fill ball gaps, after lining up 
 - **Still unknown:** the real score. The practice exam now resembles the real tracking much
   more closely, but it is still other matches with simulated damage.
 
+- **12 Nov** — Added Metrica's three public sample games as more practice matches (the
+  model has learned from only 7 so far). They have no frame-by-frame possession, so the
+  answers are built from their event data: dead from a stoppage (ball out, foul, offside,
+  goal) to the restart, and otherwise the team that last had the ball under control, with the
+  same 2-second rule as before. Checks on the result: the team nearest the ball agrees with
+  these answers 94-95% of the time (DFL: 89-93%), possession counts and lengths look like the
+  DFL matches, and the ball vanishes from Metrica's tracking within one frame of every
+  stoppage found in the events. Fixed one trap on the way: game 3 reorders its players at
+  every substitution, which first scrambled the teams. Also confirmed our competition loader
+  does not have that problem (one fixed layout for the whole match).
+- **Next:** Kaggle run comparing the network trained on DFL only against DFL plus Metrica, each
+  scored on every match held out in turn.
+
 ## What is in the folder
 
 | Path | What it is |

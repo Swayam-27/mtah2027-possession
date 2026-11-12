@@ -4,7 +4,7 @@ Leave-one-match-out first, so the score printed is from matches the model never 
 compared with the tree model's; then one final model trained on every match.
 
     python scripts/train_seq.py                                  # full run, GPU recommended
-    python scripts/train_seq.py --copies 1 --cv-steps 20 --steps 20 --folds 1 --matches 2   # smoke test
+    python scripts/train_seq.py --copies 1 --cv-steps 20 --steps 20 --dfl 1 --metrica 1 --no-stress   # smoke test
 """
 
 import argparse
@@ -38,9 +38,6 @@ DECODERS = ((2.0, 2.0), (4.0, 8.0), (8.0, 16.0), (12.0, 32.0), (16.0, 48.0))
 STRESS = {
     "calibrated": Noise(),
     "ball unseen 55%": Noise(ball_missing=0.55),
-    "ball unseen 25%": Noise(ball_missing=0.25),
-    "no camera effect": Noise(cam_height=0.0, air_lost=99.0, out_seen=1.0),
-    "big position error": Noise(ball_drift=1.2),
     "short gaps, jitter": Noise(ball_mean_gap=40.0, ball_fill=0, ball_smooth=1, ball_jitter=0.15,
                                 ball_drift=0.0, player_mean_gap=30.0, player_fill=0,
                                 player_smooth=1, player_jitter=0.10, dead_hidden=0.25,
@@ -125,8 +122,8 @@ if __name__ == '__main__':
     parser.add_argument("--copies", type=int, default=6, help="degraded copies per match")
     parser.add_argument("--steps", type=int, default=6000, help="steps for the final model")
     parser.add_argument("--cv-steps", type=int, default=3000, help="steps per held-out test")
-    parser.add_argument("--folds", type=int, default=7)
-    parser.add_argument("--matches", type=int, default=0, help="use only the first N (testing)")
+    parser.add_argument("--dfl", type=int, default=0, help="use only the first N DFL matches (testing)")
+    parser.add_argument("--metrica", type=int, default=3, help="Metrica matches to use")
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--no-stress", action="store_true", help="calibrated noise only")
     parser.add_argument("--seeds", type=int, default=3, help="models in the final file")
@@ -134,17 +131,19 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    paths = sorted(glob.glob(os.path.join(ROOT, "cache", "DFL-*.npz")))[:args.matches or None]
-    if not paths:
+    dfl = sorted(glob.glob(os.path.join(ROOT, "cache", "DFL-*.npz")))
+    metrica = sorted(glob.glob(os.path.join(ROOT, "cache", "MET-*.npz")))
+    paths = dfl[:args.dfl or None] + metrica[:args.metrica]
+    if not dfl:
         raise SystemExit("no cached external matches; run scripts/prepare_external.py first")
-    print("device {}, {} matches, {} copies each".format(device, len(paths), args.copies),
-          flush=True)
+    source = ["DFL" if os.path.basename(p).startswith("DFL") else "Metrica" for p in paths]
+    print("device {}, {} DFL + {} Metrica matches, {} copies each".format(
+        device, source.count("DFL"), source.count("Metrica"), args.copies), flush=True)
 
     started = time.time()
     variants = list(STRESS)[:1 if args.no_stress else None]
-    folds = min(args.folds, len(paths))
     train_jobs = [(p, 100 * c + i, None) for i, p in enumerate(paths) for c in range(args.copies)]
-    test_jobs = [(p, 500 + i, v) for i, p in enumerate(paths[:folds]) for v in variants]
+    test_jobs = [(p, 500 + i, v) for i, p in enumerate(paths) for v in variants]
     with Pool(args.workers) as pool:
         prepared = pool.map(prepare, train_jobs + test_jobs, chunksize=1)
     train_data, test_data = prepared[:len(train_jobs)], prepared[len(train_jobs):]
@@ -153,70 +152,60 @@ if __name__ == '__main__':
     print("prepared {} training copies, {} features ({:.0f} s)".format(
         len(train_data), len(names), time.time() - started), flush=True)
 
-    # The comparison: the same network with and without the team-shape inputs.
-    everything = list(range(len(names)))
-    plain = [i for i, name in enumerate(names) if not name.startswith("shape_")]
-    plan = [("with team shape", everything), ("without team shape", plain)]
-    print("{} inputs with team shape, {} without".format(len(everything), len(plain)), flush=True)
+    # The comparison: the same network trained on DFL matches only, and on DFL plus Metrica.
+    # Every match is held out in turn; the held-out match is never in either training set.
+    plan = [("DFL only", {"DFL"}), ("DFL + Metrica", {"DFL", "Metrica"})]
 
     def spell(prob, item, team=12.0, dead=32.0):
         pred = decode.decode_match(prob, item["runs"], team, dead)
         return score(item["y"].astype(np.int8), pred)
 
     totals, stress = {}, {}
-    for k in range(folds):
-        copies = [c for i, group in enumerate(by_match) if i != k for c in group]
-        probs = {v: [] for v in variants}
-        for tag, cols in plan:
+    for k in range(len(paths)):
+        print("held out {} ({})".format(os.path.basename(paths[k]), source[k]), flush=True)
+        for tag, allowed in plan:
+            copies = [c for i, group in enumerate(by_match)
+                      if i != k and source[i] in allowed for c in group]
+            if not copies:
+                continue
             net, mean, std = train(copies, args.cv_steps, device, seed=k,
-                                   label="fold {} {}".format(k, tag), cols=cols)
-            ckpt = {"names": [names[i] for i in cols], "mean": mean, "std": std}
+                                   label="fold {} {}".format(k, tag))
+            ckpt = {"names": names, "mean": mean, "std": std}
             for j, variant in enumerate(variants):
                 item = test_data[k * len(variants) + j]
-                probs[variant].append(
-                    seqmodel.predict(net, ckpt, item["match"], item["features"], device))
+                prob = seqmodel.predict(net, ckpt, item["match"], item["features"], device)
+                s = spell(prob, item)
+                key = "{:<8} test, {:<14} {}".format(source[k], tag, variant)
+                if j == 0:
+                    print("  " + line(tag, s), flush=True)
+                    totals.setdefault(key, []).append(s["spell"])
+                else:
+                    stress.setdefault(key, []).append(s["spell"])
             del net
-        test = test_data[k * len(variants)]
-        mine = probs[variants[0]]
-        print("held out {}".format(os.path.basename(paths[k])), flush=True)
-        results = {tag: spell(prob, test) for (tag, _), prob in zip(plan, mine)}
-        results["average of both"] = spell(sum(mine) / len(mine), test)
-        for team, dead in DECODERS:
-            results["with team shape, viterbi {:g}/{:g}".format(team, dead)] = spell(
-                mine[0], test, team, dead)
-        for name, s in results.items():
-            print("  " + line(name, s), flush=True)
-            totals.setdefault(name, []).append(s["spell"])
-        for j, variant in enumerate(variants[1:], start=1):
-            item = test_data[k * len(variants) + j]
-            for (tag, _), prob in zip(plan, probs[variant]):
-                stress.setdefault("{:<20} {}".format(variant, tag), []).append(
-                    spell(prob, item)["spell"])
 
     def table(title, rows):
         print()
         print(title)
-        for name, values in rows.items():
-            print("  {:<44} {:.4f}  (min {:.4f}, max {:.4f})".format(
-                name, float(np.mean(values)), float(np.min(values)), float(np.max(values))))
+        for name, values in sorted(rows.items()):
+            print("  {:<52} {:.4f}  (min {:.4f}, max {:.4f}, n {})".format(
+                name, float(np.mean(values)), float(np.min(values)), float(np.max(values)),
+                len(values)))
 
     if totals:
-        table("mean spellF1 over {} held-out matches, calibrated noise (viterbi 12/32 unless "
-              "stated)".format(len(next(iter(totals.values())))), totals)
+        table("mean spellF1 over held-out matches, calibrated noise (viterbi 12/32)", totals)
     if stress:
         table("same models under other noise (viterbi 12/32)", stress)
 
-    # Final models on every match: both kinds, so the choice can be made from the scores above
-    # without another run. scripts/run_round1.py picks by tag.
+    # Final models on every match, DFL and Metrica together. If the comparison above says
+    # Metrica does not help, keep the previous model file instead of this one.
     members = []
-    for tag, cols, count in (("shape", everything, args.seeds), ("plain", plain, 2)):
-        for seed in range(count):
-            net, mean, std = train(train_data, args.steps, device, seed=99 + seed,
-                                   label="final {} {}".format(tag, seed), cols=cols)
-            members.append({"state": net.cpu().state_dict(), "names": [names[i] for i in cols],
-                            "mean": mean, "std": std, "config": seqmodel.CONFIG, "tag": tag})
+    for seed in range(args.seeds):
+        net, mean, std = train(train_data, args.steps, device, seed=99 + seed,
+                               label="final {}".format(seed))
+        members.append({"state": net.cpu().state_dict(), "names": names, "mean": mean,
+                        "std": std, "config": seqmodel.CONFIG, "tag": "shape"})
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     torch.save({"members": members}, args.out)
     print()
-    print("saved {} with {} models ({:.0f} s total)".format(
+    print("saved {} with {} models trained on DFL + Metrica ({:.0f} s total)".format(
         args.out, len(members), time.time() - started))
