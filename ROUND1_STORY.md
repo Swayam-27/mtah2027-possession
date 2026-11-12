@@ -240,8 +240,19 @@ Use the second camera's tracking (broadcast) to fill ball gaps, after lining up 
   stoppage found in the events. Fixed one trap on the way: game 3 reorders its players at
   every substitution, which first scrambled the teams. Also confirmed our competition loader
   does not have that problem (one fixed layout for the whole match).
-- **Next:** Kaggle run comparing the network trained on DFL only against DFL plus Metrica, each
-  scored on every match held out in turn.
+- **12 Nov** — Metrica run is in. Every one of the 10 matches held out in turn:
+
+  | Held-out matches | trained on DFL only | DFL + Metrica |
+  |---|---|---|
+  | 7 DFL matches | 0.745 | **0.754** |
+  | 3 Metrica matches | 0.773 | **0.789** |
+  | DFL, ball hidden 55% | 0.723 | 0.738 |
+  | DFL, old-style damage | 0.724 | 0.738 |
+
+  A small gain (about +0.01, below the scorer's noise on its own), but it points the same way
+  in every test, so the submission now uses the networks trained on all 10 matches. On the
+  real match the Smart Tagging check gives 23 of 24 restarts to the tagged team. Submission
+  regenerated, validated, reproducible.
 
 ## What is in the folder
 

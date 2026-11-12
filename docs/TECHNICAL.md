@@ -40,7 +40,9 @@ Why this: on the external benchmark (leave-one-match-out over 7 matches, degrada
 calibrated to summary statistics of the competition tracking, including the displacement of
 airborne balls measured by comparing the two camera feeds), the sequence network scores
 spellF1 0.74 with the team-shape inputs (worst match 0.69, best 0.77) and 0.69 without
-them; it is better with them on all 7 matches. Under changed degradation it stays at 0.72 to
+them; it is better with them on all 7 matches. Adding the 3 Metrica matches to training raises the score on
+the 7 held-out DFL matches from 0.745 to 0.754, and on the held-out Metrica matches from 0.773
+to 0.789; the submitted networks are trained on all 10. Under changed degradation it stays at 0.72 to
 0.75 (ball unseen on 55% or 25% of frames, no camera effect, twice the position error, short
 gaps with jitter), where the version without team shape falls to 0.63 to 0.71. Under an
 earlier, cruder degradation the baseline scored 0.30, the rule engine 0.50, the tree model
@@ -48,7 +50,7 @@ earlier, cruder degradation the baseline scored 0.30, the rule engine 0.50, the 
 
 An independent check on the real match itself, against the Smart Tagging (automatic, not
 ground truth): after the tagged corners, goal kicks and free kicks, the team we give the
-first possession to is the tagged team 22 times out of 23 (15 of 24 before the team-shape
+first possession to is the tagged team 23 times out of 24 (15 of 24 before the team-shape
 inputs), and 55 of the 58 tagged restarts have one of our dead-ball stretches ending there.
 
 ## 2. Assets used and dropped
