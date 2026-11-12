@@ -205,8 +205,28 @@ Use the second camera's tracking (broadcast) to fill ball gaps, after lining up 
   give the first possession to the team taking it only 8 times in 12, and after goal kicks 5
   in 8. The model could not know better, because it did not know which way teams attack; the
   team-shape inputs should fix that. We will re-run this check on the next model.
-- **Next:** Kaggle run comparing the network with and without team shape, both trained on the
-  improved practice exam.
+- **12 Nov** — The team-shape run is in, and it is the biggest single gain since the
+  sequence model itself. On unseen practice matches with the improved (harder) damage:
+
+  | | with team shape | without |
+  |---|---|---|
+  | Matched to the real tracking | **0.743** | 0.688 |
+  | Ball hidden on 55% of frames | 0.722 | 0.627 |
+  | Ball hidden on 25% of frames | 0.747 | 0.708 |
+  | Ball drawn with twice the position error | 0.737 | 0.668 |
+  | No airborne-ball camera effect | 0.733 | 0.684 |
+  | The old damage (short gaps, shaky positions) | 0.723 | 0.700 |
+
+  Better on all 7 matches, and much steadier when the ball is hidden more. (The 0.743 is not
+  comparable with yesterday's 0.749: the exam is harder now. Without team shape, the same
+  network falls from 0.749 to 0.688 on the new exam.)
+- **12 Nov** — Real-match check against the Smart Tagging: after tagged corners, goal kicks
+  and free kicks, the team we give the ball to now matches the tag **22 times out of 23**
+  (was 15 of 24). This is the first evidence from the real match itself, not from practice
+  matches, and it says the improvement is real there too. The 5-minute pipeline check moved
+  from 0.51 to 0.68 (still too small a sample to trust on its own).
+- **12 Nov** — Submission regenerated with the three team-shape networks
+  (`outputs/Chandal Chowkdi.csv`): official validator accepts it, two runs identical.
 - **Still unknown:** the real score. The practice exam now resembles the real tracking much
   more closely, but it is still other matches with simulated damage.
 

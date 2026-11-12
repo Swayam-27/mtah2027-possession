@@ -25,20 +25,31 @@ pipeline has four stages:
    3 stages of 10 dilated 1-D convolution layers, 64 channels, about 0.5 M parameters) that
    reads the per-frame features of the whole half and outputs H/A/D probabilities per frame.
    Trained with cross-entropy plus a smoothness term, on GPU, on the external matches only.
-   Four such networks are averaged: three that differ only in their random seed and one
-   wider (96 channels, 11 layers). Predictions are also averaged over the two team orderings.
+   Besides the ball and collective player features it reads 34 team-shape inputs, 17 per
+   team, each measured in that team's own direction of attack (found per half from where
+   its deepest player stands): how far up the pitch the team is, its length and width, its
+   defensive line, whether it is advancing, how many of its players are ahead of the ball.
+   They tell the network who has the ball when the ball itself is unseen. Three networks
+   that differ only in their random seed are averaged, and every prediction is also averaged
+   over the two team orderings.
 5. **Decoding.** Viterbi over the per-frame probabilities with a fixed price for a change of
    team and a higher one for a dead/alive change. This removes flicker, which the ranking
    metric punishes as invented possessions.
 
-Why this rather than rules alone: on the external benchmark (leave-one-match-out over 7
-matches), with the degradation calibrated to summary statistics of the competition tracking,
-a single sequence network scores spellF1 0.74 (worst match 0.70, best 0.80) and the
-four-network average 0.75 (worst 0.72, best 0.80). The same models score
-0.66 with the ball unseen on 55% of frames, 0.70 with twice the ball position error and 0.74
-under a quite different noise model (short gaps, jitter). Under an earlier, uncalibrated
-degradation the baseline scored 0.30, the rule engine 0.50, the tree model 0.68 and the
-sequence model 0.78; the ordering of the methods is what we rely on from those.
+Why this: on the external benchmark (leave-one-match-out over 7 matches, degradation
+calibrated to summary statistics of the competition tracking, including the displacement of
+airborne balls measured by comparing the two camera feeds), the sequence network scores
+spellF1 0.74 with the team-shape inputs (worst match 0.69, best 0.77) and 0.69 without
+them; it is better with them on all 7 matches. Under changed degradation it stays at 0.72 to
+0.75 (ball unseen on 55% or 25% of frames, no camera effect, twice the position error, short
+gaps with jitter), where the version without team shape falls to 0.63 to 0.71. Under an
+earlier, cruder degradation the baseline scored 0.30, the rule engine 0.50, the tree model
+0.68 and the sequence model 0.78; the ordering of the methods is what we rely on from those.
+
+An independent check on the real match itself, against the Smart Tagging (automatic, not
+ground truth): after the tagged corners, goal kicks and free kicks, the team we give the
+first possession to is the tagged team 22 times out of 23 (15 of 24 before the team-shape
+inputs), and 55 of the 58 tagged restarts have one of our dead-ball stretches ending there.
 
 ## 2. Assets used and dropped
 

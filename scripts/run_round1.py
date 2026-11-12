@@ -31,7 +31,7 @@ MODEL_PATH = os.path.join(ROOT, "models", "possession.txt")
 SEQUENCE_PATH = os.path.join(ROOT, "models", "sequence.pt")
 PUBLIC_GT = os.path.join(ROOT, "official", "evaluation", "gt", "BAR-ATH_possession_gt_public.csv")
 SWITCH_TEAM, SWITCH_DEAD = 12.0, 32.0
-SEQUENCE_TAGS = None  # None = every model in the checkpoint; or e.g. ("base",)
+SEQUENCE_TAGS = ("shape",)  # the team-shape networks; the "plain" ones are kept for comparison
 
 
 def write_submission(path, codes):
