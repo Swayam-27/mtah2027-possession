@@ -128,6 +128,9 @@ if __name__ == '__main__':
     parser.add_argument("--no-stress", action="store_true", help="calibrated noise only")
     parser.add_argument("--seeds", type=int, default=3, help="models in the final file")
     parser.add_argument("--out", default=os.path.join(ROOT, "models", "sequence.pt"))
+    parser.add_argument("--final-ways", default="",
+                        help="comma-separated ways to train the final models with, skipping the "
+                             "held-out test (e.g. 'less smoothing,sharper changes')")
     args = parser.parse_args()
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -143,7 +146,9 @@ if __name__ == '__main__':
     started = time.time()
     variants = list(STRESS)[:1 if args.no_stress else None]
     train_jobs = [(p, 100 * c + i, None) for i, p in enumerate(paths) for c in range(args.copies)]
-    test_jobs = [(p, 500 + i, v) for i, p in enumerate(paths) for v in variants]
+    finals_only = [w.strip() for w in args.final_ways.split(",") if w.strip()]
+    test_jobs = [] if finals_only else [(p, 500 + i, v) for i, p in enumerate(paths)
+                                        for v in variants]
     with Pool(args.workers) as pool:
         prepared = pool.map(prepare, train_jobs + test_jobs, chunksize=1)
     train_data, test_data = prepared[:len(train_jobs)], prepared[len(train_jobs):]
@@ -163,7 +168,7 @@ if __name__ == '__main__':
     # Held-out probabilities are saved so decoders can be compared later without a GPU.
     oof = {}
     totals, stress = {}, {}
-    for k in range(len(paths)):
+    for k in range(0 if finals_only else len(paths)):
         print("held out {} ({})".format(os.path.basename(paths[k]), source[k]), flush=True)
         copies = [c for i, group in enumerate(by_match) if i != k for c in group]
         for tag, smooth, boost in plan:
@@ -201,20 +206,28 @@ if __name__ == '__main__':
     if stress:
         table("same models under other noise (viterbi 12/32)", stress)
 
-    # Final models on every match, with whichever way of training scored best on the held-out
-    # DFL matches (they are the closest to how the competition's answers were made).
+    # Final models on every match: the requested ways, or else whichever way scored best on
+    # the held-out DFL matches (they are the closest to how the competition's answers were made).
     def dfl_mean(tag):
         return float(np.mean(totals["{:<8} test, {:<16} {}".format("DFL", tag, variants[0])]))
-    best = max(plan, key=lambda p: dfl_mean(p[0])) if totals else plan[0]
-    print()
-    print("final models trained the '{}' way".format(best[0]), flush=True)
+    if finals_only:
+        ways = [p for p in plan if p[0] in finals_only]
+        if len(ways) != len(finals_only):
+            raise SystemExit("unknown way in --final-ways; known: {}".format([p[0] for p in plan]))
+    else:
+        ways = [max(plan, key=lambda p: dfl_mean(p[0])) if totals else plan[0]]
     members = []
-    for seed in range(args.seeds):
-        net, mean, std = train(train_data, args.steps, device, seed=99 + seed,
-                               label="final {}".format(seed), smooth=best[1], boost=best[2])
-        members.append({"state": net.cpu().state_dict(), "names": names, "mean": mean,
-                        "std": std, "config": seqmodel.CONFIG, "tag": "shape",
-                        "training": best[0]})
+    for way, smooth, boost in ways:
+        print()
+        print("final models trained the '{}' way".format(way), flush=True)
+        for seed in range(args.seeds):
+            net, mean, std = train(train_data, args.steps, device, seed=99 + seed,
+                                   label="final {} {}".format(way, seed), smooth=smooth,
+                                   boost=boost)
+            members.append({"state": net.cpu().state_dict(), "names": names, "mean": mean,
+                            "std": std, "config": seqmodel.CONFIG, "tag": "shape",
+                            "training": way})
+    best = (", ".join(w[0] for w in ways),)
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     torch.save({"members": members}, args.out)
     print()

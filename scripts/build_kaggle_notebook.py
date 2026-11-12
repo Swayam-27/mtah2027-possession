@@ -34,7 +34,7 @@ if __name__ == '__main__':
         "Trains on the open DFL and Metrica sample matches only. **Do not upload the competition match data "
         "to Kaggle** -- it is not needed here and its terms forbid redistribution.\n\n"
         "Before running: in the right-hand panel set **Accelerator = GPU** and "
-        "**Internet = On**. Then choose *Run All*. Takes roughly 4.5 hours, so use *Save Version -> Save & Run All*.\n\n"
+        "**Internet = On**. Then choose *Run All*. Takes roughly 2 hours, so use *Save Version -> Save & Run All*.\n\n"
         "When it finishes, download `sequence.pt` from the Output panel "
         "(`/kaggle/working/sequence.pt`) and copy the printed scores back to the team.")]
 
@@ -58,6 +58,7 @@ if __name__ == '__main__':
                           "`mean spellF1` is the number that matters), "
                           "then the final model on all seven matches."))
     cells.append(code("!python scripts/train_seq.py --copies 8 --cv-steps 4000 --steps 8000 "
+                      "--final-ways 'less smoothing,sharper changes' "
                       "--out /kaggle/working/sequence.pt"))
     cells.append(code("!ls -la /kaggle/working/sequence.pt /kaggle/working/oof.npz"))
 

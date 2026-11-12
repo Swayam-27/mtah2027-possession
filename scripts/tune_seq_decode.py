@@ -97,6 +97,14 @@ if __name__ == '__main__':
     parser.add_argument("--oof", default=os.path.join(ROOT, "outputs", "oof.npz"))
     args = parser.parse_args()
     data = load(args.oof)
+    # The average of all trained versions, per held-out match and noise variant.
+    for d in data.values():
+        groups = {}
+        for key, value in list(d.items()):
+            if key.count("|") == 1:
+                groups.setdefault(key.split("|")[1], []).append(value.astype(np.float32))
+        for variant, values in groups.items():
+            d["average of all|" + variant] = sum(values) / len(values)
     models = sorted({k.split("|")[0] for d in data.values() for k in d if k.count("|") == 1})
     variants = sorted({k.split("|")[1] for d in data.values() for k in d if k.count("|") == 1})
     print("matches {}  models {}  noise variants {}".format(len(data), models, variants))

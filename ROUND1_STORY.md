@@ -254,6 +254,19 @@ Use the second camera's tracking (broadcast) to fill ball gaps, after lining up 
   real match the Smart Tagging check gives 23 of 24 restarts to the tagged team. Submission
   regenerated, validated, reproducible.
 
+- **12 Nov** — Tried two ways to stop the model merging short possessions: weaker smoothing
+  in training, and making the frames around every change count three times more. On their own
+  neither beats the current model on the DFL matches (all three 0.753). But the held-out
+  predictions were saved this time, so I could test combinations on the laptop: **the average
+  of the three versions** scores 0.757 on DFL and 0.800 on Metrica (current: 0.753 / 0.786),
+  and is better on 8 or 9 of the 10 matches under every kind of damage tested. 75 decoder
+  settings were also compared; none beats the current one reliably, so it stays.
+- **12 Nov** — Goal kicks on the practice matches: the right team gets the restart 93.5% of the
+  time, no worse than other restarts, so the practice matches do not show the goal-kick
+  weakness seen on the real match. Nothing to fix there without real-match answers.
+- **Next:** one shorter Kaggle run to train the two extra versions on all 10 matches, then
+  submit the average of all three.
+
 ## What is in the folder
 
 | Path | What it is |
