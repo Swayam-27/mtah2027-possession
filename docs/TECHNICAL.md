@@ -62,21 +62,41 @@ inputs), and 55 of the 58 tagged restarts have one of our dead-ball stretches en
 
 ## 3. Training data
 
-No label of the competition match was used for training or tuning. The model is trained on the
-open **DFL / Sportec dataset** (Bassek et al., *Scientific Data* 2025, CC-BY 4.0): 7 Bundesliga
-matches with corrected tracking at 25 fps. Its per-frame ball status and ball possession fields,
-produced by the data provider, give the `H`/`A`/`D` labels.
+No label of the competition match was used for training or tuning, and no human-produced data
+about the competition match (event data, corrected tracking, annotations) was used at all. The
+models learn only from other, public matches, which the competition rules allow:
+
+- **DFL / Sportec open dataset** (Bassek et al., *Scientific Data* 2025, CC-BY 4.0): 7
+  Bundesliga matches with corrected tracking at 25 fps. Its per-frame ball status and ball
+  possession fields, produced by the data provider, give the `H`/`A`/`D` labels. Downloaded by
+  `scripts/download_external.py` from the public mirror `huggingface.co/datasets/pysport/idsse-data`.
+- **Metrica Sports sample data** (https://github.com/metrica-sports/sample-data, public,
+  anonymised): 3 matches with tracking at 25 fps and synchronised event data. There are no
+  per-frame labels, so they are built from the events by `possession/io_metrica.py`: dead from
+  a stoppage event (ball out, at the moment it leaves the pitch; shot out or goal; foul;
+  offside; hand ball) to the restart that follows, unless play went on (advantage); stretches
+  of 2 s or more with no ball in the tracking are also dead (the data removes the ball exactly
+  when play stops); otherwise the team of the last on-the-ball event (pass, carry, set piece,
+  recovery, shot, the touch that lost the ball). Checks: the team nearest the ball agrees with
+  these labels on 94-95% of frames where a player is within 1 m of it (DFL: 89-93%), and
+  possession counts and lengths are close to the DFL matches. Downloaded by
+  `scripts/download_metrica.py`.
 
 Two adaptations make those matches resemble the task:
 
 - **Labels.** DFL changes possession on every touch. Following the competition's definition
   (controlled possession; a loose ball stays with the last team), an opposing spell shorter than
-  2 seconds is handed back to the team that had the ball.
-- **Tracking.** The clean tracking is degraded: ball hidden on 30 to 50% of frames (more often
-  in the air, in crowds and during stoppages), jitter, false ball detections, player dropouts.
-  During stoppages DFL freezes the ball at one point; this is replaced by a simulated ball that
-  rolls out, disappears, is carried to the restart spot and placed. Each training match is
-  degraded with several random noise settings.
+  2 seconds is handed back to the team that had the ball. The same rule is applied to the
+  Metrica labels.
+- **Tracking.** The clean tracking is degraded to look like the competition's automatic
+  tracking, with every setting calibrated against summary statistics of that tracking
+  (`scripts/atd_stats.py`, `scripts/sim_stats.py`): the ball unseen on about 41% of frames in
+  long stretches, short losses filled with straight lines, smoothed positions, a slowly
+  wandering position error, airborne balls drawn on the ground where a single camera's line of
+  sight lands (and lost when very high), most of the ball's trips beyond the lines unseen, and
+  long player dropouts. During stoppages DFL freezes the ball at one point; this is replaced by
+  a simulated ball that rolls out, disappears, is carried to the restart spot and placed. Each
+  training match is degraded with many random noise settings around the calibrated one.
 
 The public 5 minutes of ground truth were used only to check the pipeline (frame alignment,
 label meaning), not to choose parameters.
