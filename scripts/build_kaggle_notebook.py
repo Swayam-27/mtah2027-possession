@@ -34,7 +34,7 @@ if __name__ == '__main__':
         "Trains on the open DFL and Metrica sample matches only. **Do not upload the competition match data "
         "to Kaggle** -- it is not needed here and its terms forbid redistribution.\n\n"
         "Before running: in the right-hand panel set **Accelerator = GPU** and "
-        "**Internet = On**. Then choose *Run All*. Takes roughly 4 hours, so use *Save Version -> Save & Run All*.\n\n"
+        "**Internet = On**. Then choose *Run All*. Takes roughly 3 hours, so use *Save Version -> Save & Run All*.\n\n"
         "When it finishes, download `sequence.pt` from the Output panel "
         "(`/kaggle/working/sequence.pt`) and copy the printed scores back to the team.")]
 
@@ -53,14 +53,18 @@ if __name__ == '__main__':
                       "!python scripts/prepare_external.py\n"
                       "!python scripts/download_metrica.py\n"
                       "!python scripts/prepare_metrica.py\n"
-                      "!rm -rf external"))
+                      "!rm -rf external\n"
+                      "# PFF World Cup matches, converted locally (scripts/prepare_pff.py) and attached\n"
+                      "# to this notebook as a private Kaggle dataset; skipped if not attached.\n"
+                      "!find /kaggle/input -name 'PFF-*.npz' -exec cp {} cache/ \\;\n"
+                      "!ls cache | grep -c PFF || true"))
     cells.append(markdown("## 2. Train\n\nFirst a leave-one-match-out test (the printed "
                           "`mean spellF1` is the number that matters), "
                           "then the final model on all seven matches."))
     cells.append(code("!python scripts/train_seq.py --copies 8 --cv-steps 4000 --steps 8000 "
-                      "--experiment longer-mirror "
+                      "--experiment pff --pff 64 --pff-copies 2 "
                       "--out /kaggle/working/sequence.pt"))
-    cells.append(code("!ls -la /kaggle/working/oof_longer_mirror.npz"))
+    cells.append(code("!ls -la /kaggle/working"))
 
     notebook = {"cells": cells, "nbformat": 4, "nbformat_minor": 5,
                 "metadata": {"kernelspec": {"display_name": "Python 3", "language": "python",

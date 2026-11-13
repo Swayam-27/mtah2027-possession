@@ -57,7 +57,8 @@ def prepare(job):
     f = features.compute(noisy)
     x, names = seqmodel.frame_tensor(noisy, f)
     x_swapped, _ = seqmodel.frame_tensor(noisy, tree_model.swap_teams(f), names)
-    return {"x": x, "x_swapped": x_swapped, "y": truth.astype(np.int64), "runs": noisy.runs,
+    return {"x": x.astype(np.float16), "x_swapped": x_swapped.astype(np.float16),
+            "y": truth.astype(np.int64), "runs": noisy.runs,
             "names": names, "match": noisy if default_noise else None,
             "features": f if default_noise else None}
 
@@ -72,7 +73,7 @@ def batches(copies, mean, std, rng, device, cols):
             a = int(rng.integers(start, max(start + 1, stop - CROP)))
             b = min(stop, a + CROP)
             swap = rng.random() < 0.5
-            x = (item["x_swapped" if swap else "x"][a:b][:, cols] - mean) / std
+            x = (item["x_swapped" if swap else "x"][a:b][:, cols].astype(np.float32) - mean) / std
             y = item["y"][a:b]
             if swap:
                 y = SWAP[y]
@@ -89,7 +90,7 @@ def train(copies, steps, device, seed, label, config=None, cols=None, smooth=0.1
     torch.manual_seed(seed)
     rng = np.random.default_rng(seed)
     cols = np.arange(copies[0]["x"].shape[1]) if cols is None else np.asarray(cols)
-    sample = np.vstack([c["x"][::50][:, cols] for c in copies])
+    sample = np.vstack([c["x"][::50][:, cols].astype(np.float32) for c in copies])
     mean = sample.mean(axis=0).astype(np.float32)
     std = (sample.std(axis=0) + 1e-3).astype(np.float32)
 
@@ -128,7 +129,9 @@ if __name__ == '__main__':
     parser.add_argument("--no-stress", action="store_true", help="calibrated noise only")
     parser.add_argument("--seeds", type=int, default=3, help="models in the final file")
     parser.add_argument("--out", default=os.path.join(ROOT, "models", "sequence.pt"))
-    parser.add_argument("--experiment", default="", choices=("", "longer-mirror"),
+    parser.add_argument("--pff", type=int, default=0, help="PFF World Cup matches to train on")
+    parser.add_argument("--pff-copies", type=int, default=2, help="degraded copies per PFF match")
+    parser.add_argument("--experiment", default="", choices=("", "longer-mirror", "pff"),
                         help="longer-mirror: test 2x longer training and mirrored predictions, "
                              "save held-out predictions, train no final model")
     parser.add_argument("--final-ways", default="",
@@ -139,23 +142,29 @@ if __name__ == '__main__':
     device = "cuda" if torch.cuda.is_available() else "cpu"
     dfl = sorted(glob.glob(os.path.join(ROOT, "cache", "DFL-*.npz")))
     metrica = sorted(glob.glob(os.path.join(ROOT, "cache", "MET-*.npz")))
-    paths = dfl[:args.dfl or None] + metrica[:args.metrica]
+    pff = sorted(glob.glob(os.path.join(ROOT, "cache", "PFF-*.npz")))[:args.pff]
+    paths = dfl[:args.dfl or None] + metrica[:args.metrica] + pff
     if not dfl:
         raise SystemExit("no cached external matches; run scripts/prepare_external.py first")
-    source = ["DFL" if os.path.basename(p).startswith("DFL") else "Metrica" for p in paths]
-    print("device {}, {} DFL + {} Metrica matches, {} copies each".format(
-        device, source.count("DFL"), source.count("Metrica"), args.copies), flush=True)
+    source = [{"DFL": "DFL", "MET": "Metrica", "PFF": "PFF"}[os.path.basename(p)[:3]]
+              for p in paths]
+    print("device {}, {} DFL + {} Metrica + {} PFF matches, {} copies each ({} per PFF match)".format(
+        device, source.count("DFL"), source.count("Metrica"), source.count("PFF"), args.copies,
+        args.pff_copies), flush=True)
+    # Held-out tests are on DFL and Metrica matches only; PFF matches are only ever trained on.
+    tested = [i for i, src in enumerate(source) if src != "PFF"]
 
     started = time.time()
     variants = list(STRESS)[:1 if args.no_stress else None]
-    train_jobs = [(p, 100 * c + i, None) for i, p in enumerate(paths) for c in range(args.copies)]
+    count = [args.pff_copies if src == "PFF" else args.copies for src in source]
+    train_jobs = [(p, 100 * c + i, None) for i, p in enumerate(paths) for c in range(count[i])]
     finals_only = [w.strip() for w in args.final_ways.split(",") if w.strip()]
-    test_jobs = [] if finals_only else [(p, 500 + i, v) for i, p in enumerate(paths)
-                                        for v in variants]
+    test_jobs = [] if finals_only else [(paths[i], 500 + i, v) for i in tested for v in variants]
     with Pool(args.workers) as pool:
         prepared = pool.map(prepare, train_jobs + test_jobs, chunksize=1)
     train_data, test_data = prepared[:len(train_jobs)], prepared[len(train_jobs):]
-    by_match = [train_data[i * args.copies:(i + 1) * args.copies] for i in range(len(paths))]
+    offsets = np.concatenate(([0], np.cumsum(count)))
+    by_match = [train_data[offsets[i]:offsets[i + 1]] for i in range(len(paths))]
     names = train_data[0]["names"]
     print("prepared {} training copies, {} features ({:.0f} s)".format(
         len(train_data), len(names), time.time() - started), flush=True)
@@ -168,10 +177,40 @@ if __name__ == '__main__':
         pred = decode.decode_match(prob, item["runs"], team, dead)
         return score(item["y"].astype(np.int8), pred)
 
+    if args.experiment == "pff":
+        totals = {}
+        for t, k in enumerate(tested):
+            name = os.path.basename(paths[k])[:-4]
+            print("held out {} ({})".format(name, source[k]), flush=True)
+            for tag, allowed in (("without PFF", {"DFL", "Metrica"}),
+                                 ("with PFF", {"DFL", "Metrica", "PFF"})):
+                copies = [c for i, group in enumerate(by_match)
+                          if i != k and source[i] in allowed for c in group]
+                net, mean, std = train(copies, args.cv_steps, device, seed=k,
+                                       label="fold {} {}".format(k, tag))
+                ckpt = {"names": names, "mean": mean, "std": std}
+                for j, variant in enumerate(variants):
+                    item = test_data[t * len(variants) + j]
+                    prob = seqmodel.predict(net, ckpt, item["match"], item["features"], device)
+                    s = spell(prob, item)
+                    totals.setdefault("{:<8} test, {:<12} {}".format(source[k], tag, variant),
+                                      []).append(s["spell"])
+                    if j == 0:
+                        print("  " + line(tag, s), flush=True)
+                del net
+        print()
+        print("mean spellF1 over held-out matches (viterbi 12/32)")
+        for key, values in sorted(totals.items()):
+            print("  {:<52} {:.4f}  (min {:.4f}, max {:.4f}, n {})".format(
+                key, float(np.mean(values)), float(np.min(values)), float(np.max(values)),
+                len(values)))
+        print("\n({:.0f} s total)".format(time.time() - started))
+        sys.exit(0)
+
     if args.experiment == "longer-mirror":
         oof, totals = {}, {}
         out_dir = os.path.dirname(os.path.abspath(args.out))
-        for k in range(len(paths)):
+        for t, k in enumerate(tested):
             name = os.path.basename(paths[k])[:-4]
             print("held out {} ({})".format(name, source[k]), flush=True)
             copies = [c for i, group in enumerate(by_match) if i != k for c in group]
@@ -180,7 +219,7 @@ if __name__ == '__main__':
                                        label="fold {} {} steps".format(k, steps))
                 members = [(net, {"names": names, "mean": mean, "std": std})]
                 for j, variant in enumerate(variants):
-                    item = test_data[k * len(variants) + j]
+                    item = test_data[t * len(variants) + j]
                     plain = seqmodel.predict_all(members, item["match"], item["features"], device)
                     both = seqmodel.predict_mirrored(members, item["match"], item["features"],
                                                      device)
@@ -209,7 +248,7 @@ if __name__ == '__main__':
     # Held-out probabilities are saved so decoders can be compared later without a GPU.
     oof = {}
     totals, stress = {}, {}
-    for k in range(0 if finals_only else len(paths)):
+    for t, k in enumerate([] if finals_only else tested):
         print("held out {} ({})".format(os.path.basename(paths[k]), source[k]), flush=True)
         copies = [c for i, group in enumerate(by_match) if i != k for c in group]
         for tag, smooth, boost in plan:
@@ -217,7 +256,7 @@ if __name__ == '__main__':
                                    label="fold {} {}".format(k, tag), smooth=smooth, boost=boost)
             ckpt = {"names": names, "mean": mean, "std": std}
             for j, variant in enumerate(variants):
-                item = test_data[k * len(variants) + j]
+                item = test_data[t * len(variants) + j]
                 prob = seqmodel.predict(net, ckpt, item["match"], item["features"], device)
                 name = os.path.basename(paths[k])[:-4]
                 oof["{}|{}|{}".format(name, tag, variant)] = prob.astype(np.float16)
