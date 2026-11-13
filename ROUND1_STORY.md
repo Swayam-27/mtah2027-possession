@@ -282,7 +282,16 @@ Use the second camera's tracking (broadcast) to fill ball gaps, after lining up 
 
   Better on all 10 matches. The biggest gain since the team-shape inputs. Mirrored
   predictions were tested in the same run and did not help, so they are not used.
-- **Next:** train the final nine networks (three recipes x three seeds) with PFF included.
+- **13 Nov, evening — where things stand.** Three Kaggle runs queued overnight:
+  1. `kaggle/train_sequence_model.ipynb`: the final nine networks with PFF. Its `sequence.pt`
+     goes in `outputs/`; then regenerate the CSV, validate, run `scripts/tagging_check.py`.
+  2. `kaggle/experiment_longer.ipynb`: same network trained twice as long.
+  3. `kaggle/experiment_wide.ipynb`: bigger network trained twice as long.
+  Runs 2 and 3 are compared with "with PFF" = 0.768 on DFL / 0.823 on Metrica. If one clearly
+  wins, retrain the final nine that way. Then: update the technical document, re-run the
+  fresh-clone reproduction check, make the repo public, submit when the form arrives (it has
+  not arrived yet). PFF data: converted files are in a private Kaggle dataset
+  `pff-wc22-converted`; local copies in `cache/PFF-*.npz`.
 
 ## What is in the folder
 
