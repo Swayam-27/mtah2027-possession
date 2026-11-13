@@ -264,8 +264,9 @@ Use the second camera's tracking (broadcast) to fill ball gaps, after lining up 
 - **12 Nov** — Goal kicks on the practice matches: the right team gets the restart 93.5% of the
   time, no worse than other restarts, so the practice matches do not show the goal-kick
   weakness seen on the real match. Nothing to fix there without real-match answers.
-- **Next:** one shorter Kaggle run to train the two extra versions on all 10 matches, then
-  submit the average of all three.
+- **13 Nov** — The two extra versions are trained on all 10 matches. The submission now
+  averages nine networks (three versions x three random starts). Regenerated, validated, two
+  runs identical, 23 of 24 restarts agree with the Smart Tagging. Takes about 1.5 minutes.
 
 ## What is in the folder
 

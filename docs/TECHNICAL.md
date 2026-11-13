@@ -29,9 +29,12 @@ pipeline has four stages:
    team, each measured in that team's own direction of attack (found per half from where
    its deepest player stands): how far up the pitch the team is, its length and width, its
    defensive line, whether it is advancing, how many of its players are ahead of the ball.
-   They tell the network who has the ball when the ball itself is unseen. Three networks
-   that differ only in their random seed are averaged, and every prediction is also averaged
-   over the two team orderings.
+   They tell the network who has the ball when the ball itself is unseen. Nine networks
+   are averaged: three training recipes (the standard loss; a weaker smoothness term; frames
+   within 1 s of a change of label weighted three times), three random seeds each. Every
+   prediction is also averaged over the two team orderings. On held-out matches the average
+   of the three recipes beats any single one on 8 or 9 of 10 matches under every degradation
+   tested (DFL 0.757 vs 0.753, Metrica 0.800 vs 0.786).
 5. **Decoding.** Viterbi over the per-frame probabilities with a fixed price for a change of
    team and a higher one for a dead/alive change. This removes flicker, which the ranking
    metric punishes as invented possessions.
