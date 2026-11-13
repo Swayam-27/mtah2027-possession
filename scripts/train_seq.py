@@ -193,10 +193,17 @@ if __name__ == '__main__':
                     item = test_data[t * len(variants) + j]
                     prob = seqmodel.predict(net, ckpt, item["match"], item["features"], device)
                     s = spell(prob, item)
-                    totals.setdefault("{:<8} test, {:<12} {}".format(source[k], tag, variant),
+                    totals.setdefault("{:<8} test, {:<21} {}".format(source[k], tag, variant),
                                       []).append(s["spell"])
                     if j == 0:
                         print("  " + line(tag, s), flush=True)
+                        # The same network, also asked about the mirrored match, both averaged.
+                        both = seqmodel.predict_mirrored([(net, ckpt)], item["match"],
+                                                         item["features"], device)
+                        s = spell(both, item)
+                        totals.setdefault("{:<8} test, {:<21} {}".format(
+                            source[k], tag + " + mirror", variant), []).append(s["spell"])
+                        print("  " + line(tag + " + mirror", s), flush=True)
                 del net
         print()
         print("mean spellF1 over held-out matches (viterbi 12/32)")
