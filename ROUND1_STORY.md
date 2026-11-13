@@ -78,7 +78,7 @@ Use the second camera's tracking (broadcast) to fill ball gaps, after lining up 
 
 - **Match data bundle is not on this computer yet** (searched D:, Downloads, Desktop, Documents).
   It has to be downloaded from the link in the enrolment email and unpacked into `official/data/`.
-- Team name is **Chandal Chowkdi**. Member list still to be written down.
+- Team **Chandal Chowkdi**: Swayam Prajapati, Viranshul Panchal, Arya Patel, Yagnik Trivedi.
 
 ## Progress log
 

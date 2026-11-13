@@ -99,4 +99,4 @@ The original process, kept for reference:
 
 ## Team
 Team name (must match all members' registration exactly): Chandal Chowkdi
-Members: <FILL IN>
+Members: Swayam Prajapati, Viranshul Panchal, Arya Patel, Yagnik Trivedi

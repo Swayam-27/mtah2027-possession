@@ -1,6 +1,8 @@
 # Technical document — Round 1, ball possession
 
-Team: Chandal Chowkdi · Draft. Numbers marked *external benchmark* come from other matches, not
+Team: **Chandal Chowkdi** — Swayam Prajapati, Viranshul Panchal, Arya Patel, Yagnik Trivedi
+
+Draft. Numbers marked *external benchmark* come from other matches, not
 from the competition match.
 
 ## 1. Approach
