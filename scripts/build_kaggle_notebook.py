@@ -12,6 +12,8 @@ import os
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "kaggle", "train_sequence_model.ipynb")
+TRAIN_ARGS = ("--pff 64 --pff-copies 2 "
+              "--final-ways 'current,less smoothing,sharper changes' ")
 FILES = sorted(glob.glob(os.path.join(ROOT, "possession", "*.py"))) + \
     sorted(glob.glob(os.path.join(ROOT, "possession", "vendor", "*.py"))) + \
     [os.path.join(ROOT, "scripts", name) for name in
@@ -29,6 +31,12 @@ def code(text):
 
 
 if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--out", default=OUT)
+    parser.add_argument("--train-args", default=TRAIN_ARGS)
+    options = parser.parse_args()
+    OUT, TRAIN_ARGS = options.out, options.train_args
     cells = [markdown(
         "# Train the possession sequence model\n\n"
         "Trains on the open DFL and Metrica sample matches only. **Do not upload the competition match data "
@@ -62,9 +70,8 @@ if __name__ == '__main__':
                           "`mean spellF1` is the number that matters), "
                           "then the final model on all seven matches."))
     cells.append(code("!python scripts/train_seq.py --copies 8 --cv-steps 4000 --steps 8000 "
-                      "--pff 64 --pff-copies 2 --final-ways 'current,less smoothing,sharper changes' "
-                      "--out /kaggle/working/sequence.pt"))
-    cells.append(code("!ls -la /kaggle/working/sequence.pt && rm -rf /kaggle/working/repo/cache"))
+                      + TRAIN_ARGS + "--out /kaggle/working/sequence.pt"))
+    cells.append(code("!ls -la /kaggle/working && rm -rf /kaggle/working/repo/cache"))
 
     notebook = {"cells": cells, "nbformat": 4, "nbformat_minor": 5,
                 "metadata": {"kernelspec": {"display_name": "Python 3", "language": "python",

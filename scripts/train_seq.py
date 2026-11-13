@@ -131,7 +131,7 @@ if __name__ == '__main__':
     parser.add_argument("--out", default=os.path.join(ROOT, "models", "sequence.pt"))
     parser.add_argument("--pff", type=int, default=0, help="PFF World Cup matches to train on")
     parser.add_argument("--pff-copies", type=int, default=2, help="degraded copies per PFF match")
-    parser.add_argument("--experiment", default="", choices=("", "longer-mirror", "pff"),
+    parser.add_argument("--experiment", default="", choices=("", "longer-mirror", "pff", "longer", "wide"),
                         help="longer-mirror: test 2x longer training and mirrored predictions, "
                              "save held-out predictions, train no final model")
     parser.add_argument("--final-ways", default="",
@@ -177,27 +177,37 @@ if __name__ == '__main__':
         pred = decode.decode_match(prob, item["runs"], team, dead)
         return score(item["y"].astype(np.int8), pred)
 
-    if args.experiment == "pff":
+    if args.experiment in ("pff", "longer", "wide"):
+        everyone = {"DFL", "Metrica", "PFF"}
+        trials = {
+            "pff": [("without PFF", {"DFL", "Metrica"}, None, args.cv_steps),
+                    ("with PFF", everyone, None, args.cv_steps)],
+            # With 74 matches there is far more to learn from: does longer training, or a
+            # bigger network trained longer, now pay off? (Compare with "with PFF" from the
+            # "pff" run, which used the same folds and seeds.)
+            "longer": [("with PFF, 2x steps", everyone, None, 2 * args.cv_steps)],
+            "wide": [("with PFF, wide, 2x steps", everyone, WIDE, 2 * args.cv_steps)],
+        }[args.experiment]
         totals = {}
         for t, k in enumerate(tested):
             name = os.path.basename(paths[k])[:-4]
             print("held out {} ({})".format(name, source[k]), flush=True)
-            for tag, allowed in (("without PFF", {"DFL", "Metrica"}),
-                                 ("with PFF", {"DFL", "Metrica", "PFF"})):
+            for tag, allowed, config, steps in trials:
                 copies = [c for i, group in enumerate(by_match)
                           if i != k and source[i] in allowed for c in group]
-                net, mean, std = train(copies, args.cv_steps, device, seed=k,
-                                       label="fold {} {}".format(k, tag))
+                net, mean, std = train(copies, steps, device, seed=k,
+                                       label="fold {} {}".format(k, tag), config=config)
                 ckpt = {"names": names, "mean": mean, "std": std}
                 for j, variant in enumerate(variants):
                     item = test_data[t * len(variants) + j]
                     prob = seqmodel.predict(net, ckpt, item["match"], item["features"], device)
                     s = spell(prob, item)
-                    totals.setdefault("{:<8} test, {:<21} {}".format(source[k], tag, variant),
+                    totals.setdefault("{:<8} test, {:<26} {}".format(source[k], tag, variant),
                                       []).append(s["spell"])
                     if j == 0:
                         print("  " + line(tag, s), flush=True)
-                        # The same network, also asked about the mirrored match, both averaged.
+                    if j == 0 and args.experiment == "pff":
+                        # The same network, also asked about the mirrored match, averaged.
                         both = seqmodel.predict_mirrored([(net, ckpt)], item["match"],
                                                          item["features"], device)
                         s = spell(both, item)
