@@ -268,6 +268,22 @@ Use the second camera's tracking (broadcast) to fill ball gaps, after lining up 
   averages nine networks (three versions x three random starts). Regenerated, validated, two
   runs identical, 23 of 24 restarts agree with the Smart Tagging. Takes about 1.5 minutes.
 
+- **13 Nov** — Added PFF FC's free 2022 World Cup data (64 matches, broadcast tracking plus
+  detailed events; free registration). Answers built from the events like Metrica's; their
+  average possession length (14.0 s) is the closest yet to the organisers' public 5 minutes
+  (14.2 s). Result, every DFL and Metrica match held out in turn:
+
+  | Held-out matches | trained without PFF | with PFF |
+  |---|---|---|
+  | 7 DFL matches | 0.753 | **0.768** |
+  | 3 Metrica matches | 0.786 | **0.823** |
+  | DFL, ball hidden 55% | 0.735 | 0.742 |
+  | DFL, old-style damage | 0.737 | 0.764 |
+
+  Better on all 10 matches. The biggest gain since the team-shape inputs. Mirrored
+  predictions were tested in the same run and did not help, so they are not used.
+- **Next:** train the final nine networks (three recipes x three seeds) with PFF included.
+
 ## What is in the folder
 
 | Path | What it is |
