@@ -107,6 +107,14 @@ def labels_from_events(events, meta, n):
         first = meta.get("startPeriod{}".format(period))
         last = meta.get("endPeriod{}".format(period))
         if first is None or last is None:
+            # Knockout matches have no period times in the metadata: take them from the
+            # kick-off that opens the half and the end-of-period event that closes it.
+            kick = "FIRSTKICKOFF" if period == 1 else "SECONDKICKOFF"
+            first = next((e["start"] for e in events if e["type"] == kick), None)
+            ends = [e["start"] for e in events if e["type"] == "END" and e["period"] == period]
+            inside = [e["start"] for e in events if e["period"] == period]
+            last = min(ends) if ends else (max(inside) if inside else None)
+        if first is None or last is None:
             continue
         start, stop = int(round(first * FPS_OUT)), min(n, int(round(last * FPS_OUT)))
         if stop <= start:

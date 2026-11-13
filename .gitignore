@@ -17,3 +17,6 @@ __pycache__/
 .idea/
 .vscode/
 
+
+# converted external data staged for a private Kaggle dataset
+kaggle_upload/
