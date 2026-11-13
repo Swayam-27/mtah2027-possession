@@ -128,6 +128,9 @@ if __name__ == '__main__':
     parser.add_argument("--no-stress", action="store_true", help="calibrated noise only")
     parser.add_argument("--seeds", type=int, default=3, help="models in the final file")
     parser.add_argument("--out", default=os.path.join(ROOT, "models", "sequence.pt"))
+    parser.add_argument("--experiment", default="", choices=("", "longer-mirror"),
+                        help="longer-mirror: test 2x longer training and mirrored predictions, "
+                             "save held-out predictions, train no final model")
     parser.add_argument("--final-ways", default="",
                         help="comma-separated ways to train the final models with, skipping the "
                              "held-out test (e.g. 'less smoothing,sharper changes')")
@@ -164,6 +167,44 @@ if __name__ == '__main__':
     def spell(prob, item, team=12.0, dead=32.0):
         pred = decode.decode_match(prob, item["runs"], team, dead)
         return score(item["y"].astype(np.int8), pred)
+
+    if args.experiment == "longer-mirror":
+        oof, totals = {}, {}
+        out_dir = os.path.dirname(os.path.abspath(args.out))
+        for k in range(len(paths)):
+            name = os.path.basename(paths[k])[:-4]
+            print("held out {} ({})".format(name, source[k]), flush=True)
+            copies = [c for i, group in enumerate(by_match) if i != k for c in group]
+            for steps in (args.cv_steps, 2 * args.cv_steps):
+                net, mean, std = train(copies, steps, device, seed=k,
+                                       label="fold {} {} steps".format(k, steps))
+                members = [(net, {"names": names, "mean": mean, "std": std})]
+                for j, variant in enumerate(variants):
+                    item = test_data[k * len(variants) + j]
+                    plain = seqmodel.predict_all(members, item["match"], item["features"], device)
+                    both = seqmodel.predict_mirrored(members, item["match"], item["features"],
+                                                     device)
+                    oof["{}|y".format(name)] = item["y"].astype(np.int8)
+                    oof["{}|runs".format(name)] = np.array(item["runs"], dtype=np.int64)
+                    for tag, prob in (("{} steps".format(steps), plain),
+                                      ("{} steps mirrored".format(steps), both)):
+                        oof["{}|{}|{}".format(name, tag, variant)] = prob.astype(np.float16)
+                        s = spell(prob, item)
+                        key = "{:<8} test, {:<20} {}".format(source[k], tag, variant)
+                        totals.setdefault(key, []).append(s["spell"])
+                        if j == 0:
+                            print("  " + line(tag, s), flush=True)
+                del net
+            np.savez_compressed(os.path.join(out_dir, "oof_longer_mirror.npz"), **oof)
+        print()
+        print("mean spellF1 over held-out matches (viterbi 12/32)")
+        for key, values in sorted(totals.items()):
+            print("  {:<60} {:.4f}  (min {:.4f}, max {:.4f}, n {})".format(
+                key, float(np.mean(values)), float(np.min(values)), float(np.max(values)),
+                len(values)))
+        print("\nsaved {} ({:.0f} s total)".format(
+            os.path.join(out_dir, "oof_longer_mirror.npz"), time.time() - started))
+        sys.exit(0)
 
     # Held-out probabilities are saved so decoders can be compared later without a GPU.
     oof = {}

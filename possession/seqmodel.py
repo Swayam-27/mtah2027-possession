@@ -149,3 +149,23 @@ def predict(net, ckpt, match, f, device="cpu"):
         q = _run(net, x_swapped[start:stop], mean, std, device)
         prob[start:stop] = (p + q[:, [A, H, D]]) / 2.0
     return prob
+
+
+def mirror(match):
+    """The same match reflected across the halfway line's axis (top and bottom swapped).
+
+    Football looks the same in a mirror, so a prediction made on the mirrored match is a second,
+    slightly different opinion about the same frames; averaging the two cancels some errors.
+    """
+    from dataclasses import replace
+    width = match.pitch[1]
+    return replace(match, py=width - match.py, by=width - match.by)
+
+
+def predict_mirrored(members, match, f=None, device="cpu"):
+    """Mean of the members' probabilities on the match and on its mirror image."""
+    from . import features
+    f = f if f is not None else features.compute(match)
+    flipped = mirror(match)
+    return (predict_all(members, match, f, device)
+            + predict_all(members, flipped, features.compute(flipped), device)) / 2.0
