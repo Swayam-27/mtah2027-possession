@@ -13,7 +13,7 @@ import os
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "kaggle", "train_sequence_model.ipynb")
 TRAIN_ARGS = ("--pff 64 --pff-copies 2 "
-              "--final-ways 'current,less smoothing,sharper changes' ")
+              "--final-ways 'current,less smoothing,sharper changes' --final-wide 3 ")
 FILES = sorted(glob.glob(os.path.join(ROOT, "possession", "*.py"))) + \
     sorted(glob.glob(os.path.join(ROOT, "possession", "vendor", "*.py"))) + \
     [os.path.join(ROOT, "scripts", name) for name in
@@ -42,7 +42,7 @@ if __name__ == '__main__':
         "Trains on the open DFL and Metrica sample matches only. **Do not upload the competition match data "
         "to Kaggle** -- it is not needed here and its terms forbid redistribution.\n\n"
         "Before running: in the right-hand panel set **Accelerator = GPU** and "
-        "**Internet = On**. Then choose *Run All*. Takes roughly 3 hours, so use *Save Version -> Save & Run All*.\n\n"
+        "**Internet = On**. Then choose *Run All*. Takes roughly 4.5 hours, so use *Save Version -> Save & Run All*.\n\n"
         "When it finishes, download `sequence.pt` from the Output panel "
         "(`/kaggle/working/sequence.pt`) and copy the printed scores back to the team.")]
 

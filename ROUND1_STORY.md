@@ -293,6 +293,18 @@ Use the second camera's tracking (broadcast) to fill ball gaps, after lining up 
   not arrived yet). PFF data: converted files are in a private Kaggle dataset
   `pff-wc22-converted`; local copies in `cache/PFF-*.npz`.
 
+- **14 Nov** — Both overnight experiments won (every DFL and Metrica match held out):
+
+  | | DFL | Metrica | DFL, ball hidden 55% |
+  |---|---|---|---|
+  | with PFF (4000 training steps) | 0.768 | 0.823 | 0.742 |
+  | with PFF, twice as long | **0.784** | 0.822 | 0.756 |
+  | with PFF, bigger network, twice as long | 0.780 | **0.830** | **0.765** |
+
+  Longer training is better on 6 of 7 DFL matches. The final models were already trained for
+  the longer length; the final file now also adds three of the bigger networks, since they
+  hold up best when more of the ball is hidden.
+
 ## What is in the folder
 
 | Path | What it is |

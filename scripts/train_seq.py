@@ -134,6 +134,9 @@ if __name__ == '__main__':
     parser.add_argument("--experiment", default="", choices=("", "longer-mirror", "pff", "longer", "wide"),
                         help="longer-mirror: test 2x longer training and mirrored predictions, "
                              "save held-out predictions, train no final model")
+    parser.add_argument("--final-wide", type=int, default=0,
+                        help="also train this many wider networks (standard recipe) for the "
+                             "final file")
     parser.add_argument("--final-ways", default="",
                         help="comma-separated ways to train the final models with, skipping the "
                              "held-out test (e.g. 'less smoothing,sharper changes')")
@@ -324,7 +327,12 @@ if __name__ == '__main__':
             members.append({"state": net.cpu().state_dict(), "names": names, "mean": mean,
                             "std": std, "config": seqmodel.CONFIG, "tag": "shape",
                             "training": way})
-    best = (", ".join(w[0] for w in ways),)
+    for seed in range(args.final_wide):
+        net, mean, std = train(train_data, args.steps, device, seed=199 + seed,
+                               label="final wide {}".format(seed), config=WIDE)
+        members.append({"state": net.cpu().state_dict(), "names": names, "mean": mean,
+                        "std": std, "config": WIDE, "tag": "shape", "training": "wide"})
+    best = (", ".join([w[0] for w in ways] + (["wide"] if args.final_wide else [])),)
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     torch.save({"members": members}, args.out)
     print()
