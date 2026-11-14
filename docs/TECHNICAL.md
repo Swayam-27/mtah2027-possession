@@ -62,10 +62,13 @@ networks trained without it; DFL is closest to how the competition's answers are
 | + 64 PFF World Cup matches | 0.77 | 0.82 |
 | + twice the training length | **0.78** | 0.82 |
 | bigger network, twice the length | 0.78 | **0.83** |
+| four times the length | 0.79 | 0.83 |
 
 The submitted twelve-network average was not itself scored on held-out matches (that would need
 it retrained once per match); averaging versions has raised the held-out score every time we
 measured it (e.g. three recipes: 0.757 vs 0.753 on DFL, better on 8–9 of 10 matches).
+Four times the training length was not adopted: +0.002 on DFL, better on only 3 of 7 DFL
+matches, i.e. the gain from longer training has levelled off.
 
 **Robustness.** The damage applied to the training matches is our estimate of the competition
 tracking, so every version was also scored under deliberately wrong estimates: the ball hidden
@@ -75,9 +78,10 @@ were tested with the ball hidden on 55% of frames and under the old noise, and s
 0.76–0.82 on DFL and Metrica.
 
 **Checks on the real match** (no answers involved): against the Smart Tagging (automatic, not
-ground truth), 55 of the 58 tagged restarts have one of our dead-ball stretches ending there,
+ground truth), 53 of the 58 tagged restarts have one of our dead-ball stretches ending within
+3 s of them,
 and after tagged corners, goal kicks and free kicks we give the ball to the tagged team 23
-times out of 24. Our possessions on the full match average about 15 s, against 14.2 s in the
+times out of 24. Our possessions on the full match average 15.4 s, against 14.2 s in the
 public 5 minutes.
 
 ## 2. Assets used and dropped

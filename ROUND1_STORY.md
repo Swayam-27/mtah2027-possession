@@ -305,6 +305,14 @@ Use the second camera's tracking (broadcast) to fill ball gaps, after lining up 
   the longer length; the final file now also adds three of the bigger networks, since they
   hold up best when more of the ball is hidden.
 
+- **14 Nov** — Four times the training length: 0.786 on DFL against 0.784 for twice the length,
+  better on only 3 of 7 DFL matches. The gain has levelled off, so not adopted.
+- **14 Nov** — **Final model installed**: twelve networks trained on all 74 matches (three
+  recipes x three seeds, plus three bigger networks). Submission regenerated: official
+  validator accepts it, two runs identical (about 2 minutes). Real-match checks: 23 of 24
+  set-piece restarts go to the tagged team; 53 of 58 tagged restarts have one of our dead-ball
+  stretches ending within 3 s; possessions average 15.4 s (public 5 minutes: 14.2 s).
+
 ## What is in the folder
 
 | Path | What it is |
