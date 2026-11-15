@@ -312,6 +312,14 @@ Use the second camera's tracking (broadcast) to fill ball gaps, after lining up 
   validator accepts it, two runs identical (about 2 minutes). Real-match checks: 23 of 24
   set-piece restarts go to the tagged team; 53 of 58 tagged restarts have one of our dead-ball
   stretches ending within 3 s; possessions average 15.4 s (public 5 minutes: 14.2 s).
+- **15 Nov** — Video ball detection tried and dropped. A pretrained detector run locally on
+  2,000 frames: after removing detections beyond the lines, filling 20% of the missing ball
+  costs a 34% error rate (we required 80% accuracy before looking). And it could not matter much:
+  on the real match the ball is hidden in only 8.6% of live play (83.8% of dead time), close to
+  our simulation (3–10% and 84%), so the practice test does resemble the real match.
+- **15 Nov** — Timing of possession changes checked on the practice matches: no early/late bias
+  (mean 0.06 s, half within ±0.4 s); shifting them only lowers the score. Nothing left to fix
+  there. Submission unchanged; to be submitted by the team on 16 Nov.
 
 ## What is in the folder
 
