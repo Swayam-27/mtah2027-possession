@@ -91,7 +91,8 @@ public 5 minutes.
 | **Tactical ATD** (players + ball) | **The only input of the submitted pipeline.** Its summary statistics (never its rows) also calibrated the damage applied to the training matches: share and length of ball gaps, smoothing, position error, player dropouts |
 | **Broadcast ATD** | Not an input. Aligned to the tactical timeline automatically (players then agree within 0.3 m); the two ball feeds disagree, across the pitch and by metres, exactly when the ball is in the air. That taught us to simulate airborne balls drawn where a single camera's line of sight meets the ground. Merging it in would have filled only 9% of the missing ball, so it was dropped as an input |
 | **Smart Tagging** | Not an input (no equivalent exists for the training matches). Used as an independent check of restarts and of the team in tagged phases (above) |
-| Homography, tactical video, broadcast video | Not used. Ball detection from video was considered and dropped: the ball is missing mostly during stoppages and in the air, where a new detector would also fail, for weeks of work |
+| Tactical video + homography | Tested and dropped. A pretrained detector (YOLOv8n, COCO "sports ball", run locally, `scripts/video_ball.py`) on 2,000 sampled frames, detections taken to the pitch with the homography. Most false detections lie beyond the lines; after filtering, the best setting that fills 20% of the frames without a tracked ball puts the ball within 2 m of the tracking only 66% of the time where both see it (we had required 80% before looking). A simulation had already shown that even perfect positions on 25% of those frames add only +0.004 spellF1 |
+| Broadcast video | Not used |
 | Public 5-minute ground truth | Pipeline check only (frame alignment, label meaning). Never used to choose anything |
 
 Also built and dropped: the rule engine alone (0.46), a gradient-boosted tree model on windowed
@@ -158,8 +159,8 @@ calibrated ones.
 - **Goal kicks** are the restart we place least precisely on the real match (8 of 10 within
   3 s of the tagged restart).
 - **With more time:** fine-tune on the real tracking with self-generated labels, add the
-  Smart Tagging as a learned input (needs equivalent tags on training data), and detect the
-  ball in the tactical video where the tracking loses it.
+  Smart Tagging as a learned input (needs equivalent tags on training data), and a ball
+  detector trained for this camera (the pretrained one was not accurate enough, section 2).
 
 ## 6. Reproduction
 
