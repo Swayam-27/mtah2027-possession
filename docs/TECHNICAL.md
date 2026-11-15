@@ -77,6 +77,12 @@ short-gap/jitter noise. Earlier versions held up under all of these; the PFF-tra
 were tested with the ball hidden on 55% of frames and under the old noise, and stay at
 0.76–0.82 on DFL and Metrica.
 
+**Does the simulation hide the ball at the right moments?** It was calibrated on totals only,
+so we checked afterwards where the hidden frames fall (`scripts/missing_by_phase.py`; live/dead
+on the real match taken from our own output). Real tracking: ball unseen on 40.7% of the halves,
+8.6% of live play, 83.8% of dead time. Simulated DFL matches: 41–45%, 3.1–10.3% and 84%. The
+real match sits at the harder end of the simulated range in live play, but inside it.
+
 **Checks on the real match** (no answers involved): against the Smart Tagging (automatic, not
 ground truth), 53 of the 58 tagged restarts have one of our dead-ball stretches ending within
 3 s of them,

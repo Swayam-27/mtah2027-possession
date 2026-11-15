@@ -45,22 +45,50 @@ STRESS = {
 }
 
 
+def reveal(clean, noisy, share, seed):
+    """Simulate a perfect video ball detector: give back the true ball on about `share` of the
+    frames where the degraded tracking has none, in one-second pieces, while the ball is alive.
+    An upper bound on what a real detector could add (real detections are noisier)."""
+    if share <= 0:
+        return noisy
+    rng = np.random.default_rng(seed + 7)
+    n = noisy.n_frames
+    alive = (clean.labels == H) | (clean.labels == A)
+    hidden = np.isnan(noisy.bx) & ~np.isnan(clean.bx) & alive
+    pick = hidden & np.repeat(rng.random(n // 25 + 1) < share, 25)[:n]
+    noisy.bx, noisy.by = noisy.bx.copy(), noisy.by.copy()
+    noisy.bx[pick], noisy.by[pick] = clean.bx[pick], clean.by[pick]
+    return noisy
+
+
+def missing_share(match, labels):
+    """Share of frames without a ball: inside the halves, and inside the halves in live play."""
+    inside = np.zeros(match.n_frames, dtype=bool)
+    for a, b in match.runs:
+        inside[a:b] = True
+    live = inside & ((labels == H) | (labels == A))
+    return float(np.isnan(match.bx[inside]).mean()), float(np.isnan(match.bx[live]).mean())
+
+
 def prepare(job):
     """One degraded copy of one match: frame tensors for both team orderings, labels, runs."""
-    path, seed, variant = job
+    path, seed, variant, revealed = job
     default_noise = variant is not None
     match = Match.load(path)
     match.labels = relabel.controlled(match.labels, match.runs, MIN_CONTROL)
     truth = graded_truth(match)
     noise = STRESS[variant] if default_noise else random_noise(np.random.default_rng(1000 + seed))
     noisy = degrade(match, noise, seed=seed)
+    before = missing_share(noisy, match.labels)
+    noisy = reveal(match, noisy, revealed, seed)
+    after = missing_share(noisy, match.labels)
     f = features.compute(noisy)
     x, names = seqmodel.frame_tensor(noisy, f)
     x_swapped, _ = seqmodel.frame_tensor(noisy, tree_model.swap_teams(f), names)
     return {"x": x.astype(np.float16), "x_swapped": x_swapped.astype(np.float16),
             "y": truth.astype(np.int64), "runs": noisy.runs,
             "names": names, "match": noisy if default_noise else None,
-            "features": f if default_noise else None}
+            "features": f if default_noise else None, "missing": (before, after)}
 
 
 def batches(copies, mean, std, rng, device, cols):
@@ -131,7 +159,11 @@ if __name__ == '__main__':
     parser.add_argument("--out", default=os.path.join(ROOT, "models", "sequence.pt"))
     parser.add_argument("--pff", type=int, default=0, help="PFF World Cup matches to train on")
     parser.add_argument("--pff-copies", type=int, default=2, help="degraded copies per PFF match")
-    parser.add_argument("--experiment", default="", choices=("", "longer-mirror", "pff", "longer", "wide"),
+    parser.add_argument("--ball-revealed", type=float, default=0.0,
+                        help="simulate a perfect video detector filling this share of the "
+                             "missing ball, in training and test (experiment 'video')")
+    parser.add_argument("--experiment", default="",
+                        choices=("", "longer-mirror", "pff", "longer", "wide", "video"),
                         help="longer-mirror: test 2x longer training and mirrored predictions, "
                              "save held-out predictions, train no final model")
     parser.add_argument("--final-wide", type=int, default=0,
@@ -160,9 +192,10 @@ if __name__ == '__main__':
     started = time.time()
     variants = list(STRESS)[:1 if args.no_stress else None]
     count = [args.pff_copies if src == "PFF" else args.copies for src in source]
-    train_jobs = [(p, 100 * c + i, None) for i, p in enumerate(paths) for c in range(count[i])]
+    r = args.ball_revealed
+    train_jobs = [(p, 100 * c + i, None, r) for i, p in enumerate(paths) for c in range(count[i])]
     finals_only = [w.strip() for w in args.final_ways.split(",") if w.strip()]
-    test_jobs = [] if finals_only else [(paths[i], 500 + i, v) for i in tested for v in variants]
+    test_jobs = [] if finals_only else [(paths[i], 500 + i, v, r) for i in tested for v in variants]
     with Pool(args.workers) as pool:
         prepared = pool.map(prepare, train_jobs + test_jobs, chunksize=1)
     train_data, test_data = prepared[:len(train_jobs)], prepared[len(train_jobs):]
@@ -171,6 +204,12 @@ if __name__ == '__main__':
     names = train_data[0]["names"]
     print("prepared {} training copies, {} features ({:.0f} s)".format(
         len(train_data), len(names), time.time() - started), flush=True)
+    for label, group in (("training", train_data), ("test, calibrated", test_data[::len(variants)])):
+        if group:
+            b, a = (np.mean([g["missing"][i] for g in group], axis=0) for i in (0, 1))
+            print("ball unseen, {}: all frames {:.3f} -> {:.3f}, live play {:.3f} -> {:.3f} "
+                  "(before -> after the simulated video)".format(label, b[0], a[0], b[1], a[1]),
+                  flush=True)
 
     # The comparison: three ways of training the same network on all the other matches.
     # "fewer merges" and "sharper changes" aim at the possessions we still merge together.
@@ -180,7 +219,7 @@ if __name__ == '__main__':
         pred = decode.decode_match(prob, item["runs"], team, dead)
         return score(item["y"].astype(np.int8), pred)
 
-    if args.experiment in ("pff", "longer", "wide"):
+    if args.experiment in ("pff", "longer", "wide", "video"):
         everyone = {"DFL", "Metrica", "PFF"}
         trials = {
             "pff": [("without PFF", {"DFL", "Metrica"}, None, args.cv_steps),
@@ -190,6 +229,8 @@ if __name__ == '__main__':
             # "pff" run, which used the same folds and seeds.)
             "longer": [("with PFF, 2x steps", everyone, None, 2 * args.cv_steps)],
             "wide": [("with PFF, wide, 2x steps", everyone, WIDE, 2 * args.cv_steps)],
+            "video": [("video fills {:.0%} of live".format(args.ball_revealed), everyone, None,
+                       args.cv_steps)],
         }[args.experiment]
         totals = {}
         for t, k in enumerate(tested):
