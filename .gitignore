@@ -20,3 +20,6 @@ __pycache__/
 
 # converted external data staged for a private Kaggle dataset
 kaggle_upload/
+.venv-gpu/
+chandal_share.zip
+TRAINING_COMMAND.txt

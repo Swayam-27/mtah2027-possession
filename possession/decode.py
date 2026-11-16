@@ -69,15 +69,21 @@ def change_costs(change_prob, scale, radius=8, floor=1e-4):
     return -scale * np.log(per_frame)
 
 
-def decode_match(prob, runs, switch_team=16.0, switch_dead=16.0, change=None, scale=None):
+def decode_match(prob, runs, switch_team=16.0, switch_dead=16.0, change=None, scale=None,
+                 round_log=None):
     """Decode each run on its own. prob is [n_frames, 3] over H, A, D.
+
+    With `round_log` (decimals), the log-probabilities are rounded first, so differences in the
+    last bits of the model's output (another CPU, another thread count) cannot change the path.
 
     With `change` ([n_frames, 3] over no change / team change / dead change) and `scale`, the
     switching prices follow the boundary model instead of being constant.
     """
     labels = np.full(len(prob), X, dtype=np.int8)
     for start, stop in runs:
-        log_prob = np.log(np.clip(prob[start:stop], 1e-6, 1.0))
+        log_prob = np.log(np.clip(prob[start:stop].astype(np.float64), 1e-6, 1.0))
+        if round_log is not None:
+            log_prob = np.round(log_prob, round_log)
         if change is None:
             cost_team, cost_dead = switch_team, switch_dead
         else:

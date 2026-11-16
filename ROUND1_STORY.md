@@ -332,3 +332,26 @@ Use the second camera's tracking (broadcast) to fill ball gaps, after lining up 
 | `scripts/run_round1.py` | One command: match data in, submission CSV out |
 | `official/` | The organisers' repo (docs, scorer). Match data goes in `official/data/` |
 | `external/`, `cache/`, `outputs/` | Downloads and generated files, never committed |
+- **16 Nov** — Two safety fixes before submitting. (1) The second half is graded from frame
+  110,808 but kicks off at 113,742, and the organisers publish that every frame in between is
+  dead. The pipeline had left this to the model, and the model called **2,836 of those 2,934
+  frames live**: a two-minute invented possession at the start of the second half. That
+  stretch is now set to `D` before decoding. (2) The networks run on one CPU thread and the
+  decoder rounds its inputs to three decimals, so floating-point differences between machines
+  cannot change the file (on synthetic inputs: 37 frames changed under tiny noise without
+  rounding, 0 with it). Regenerated on a second laptop with a fresh Python 3.10 environment:
+  validator accepts it, two runs byte-identical, 230 possessions of mean 15.3 s, 23 of 24
+  set-piece restarts go to the tagged team. Runs in about 90 s.
+- **16 Nov** — Decoder study on the held-out probabilities (`scripts/decoder_lab.py`, 18
+  variants, 10 held-out matches, 3 noise settings): separate dead-ball prices, a minimum
+  possession length, geometric averaging. Nothing beats the current decoder by more than 0.002
+  or under every noise setting: it is at its ceiling and stays. The rounding added for
+  reproducibility costs 0.0001.
+- **16 Nov** — Self-training test started on a local GPU (`scripts/selftrain_check.py`): does
+  fine-tuning on a held-out match's own decoded labels help on that match? Run with a control
+  (same fine-tuning without the self-labelled match). Result over 10 held-out matches, with
+  all 74 matches in training: base 0.7831; self-training on every frame 0.7831 (+0.0000,
+  better on 4 of 10); on the frames it is sure of 0.7834 (+0.0003); the control 0.7839
+  (+0.0008). Self-training adds nothing beyond ordinary training noise, so it is not used.
+  (The base model trained on this laptop matches the Kaggle result: 0.770 vs 0.768-0.784 on DFL.)
+  **Submission unchanged.**

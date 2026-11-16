@@ -23,7 +23,7 @@ sys.path.insert(0, os.path.join(ROOT, "scripts"))
 warnings.filterwarnings("ignore")
 from atd_stats import data_dir, load_competition  # noqa: E402
 from possession import decode, engine, features, model  # noqa: E402
-from possession.match import LABELS, X  # noqa: E402
+from possession.match import D, LABELS, X  # noqa: E402
 from possession.scoring import line, score  # noqa: E402
 from possession.vendor import possession_metrics as pm  # noqa: E402
 
@@ -32,6 +32,10 @@ SEQUENCE_PATH = os.path.join(ROOT, "models", "sequence.pt")
 PUBLIC_GT = os.path.join(ROOT, "official", "evaluation", "gt", "BAR-ATH_possession_gt_public.csv")
 SWITCH_TEAM, SWITCH_DEAD = 12.0, 32.0
 SEQUENCE_TAGS = ("shape",)  # the team-shape networks; the "plain" ones are kept for comparison
+PREKICKOFF_DEAD = (110808, 113742)  # graded, all D, second half not yet kicked off (FAQ.md)
+# Log-probabilities are rounded before Viterbi so tiny floating-point differences between
+# machines (CPU instruction sets, thread counts) cannot change the decoded file.
+ROUND_LOG = 3
 
 
 def write_submission(path, codes):
@@ -47,6 +51,7 @@ if __name__ == '__main__':
     parser.add_argument("--method", choices=("model", "rules", "sequence", "both"),
                         default="sequence")
     parser.add_argument("--out", default=os.path.join(ROOT, "outputs", "submission.csv"))
+    parser.add_argument("--sequence", default=SEQUENCE_PATH, help="sequence-model checkpoint")
     args = parser.parse_args()
 
     match = load_competition(data_dir(args.data))
@@ -59,11 +64,22 @@ if __name__ == '__main__':
             import lightgbm as lgb
             probs.append(model.predict(lgb.Booster(model_file=MODEL_PATH), match, f))
         if args.method in ("sequence", "both"):
+            import torch
             from possession import seqmodel
-            members = seqmodel.load_all(SEQUENCE_PATH, SEQUENCE_TAGS)
+            torch.set_num_threads(1)  # fixed summation order: same numbers on every machine
+            members = seqmodel.load_all(args.sequence, SEQUENCE_TAGS)
             probs.append(seqmodel.predict_all(members, match, f))
         prob = sum(probs) / len(probs)
-        codes = decode.decode_match(prob, match.runs, SWITCH_TEAM, SWITCH_DEAD)
+        # Published by the organisers (FAQ, games.py): the second half is graded from 110,808
+        # but kicks off at 113,742, and every frame in between is D. Not a hand label: a fact
+        # of the scoring window, applied before decoding so the kickoff transition is clean.
+        a, b = PREKICKOFF_DEAD
+        unsure = int(np.sum(prob[a:b].argmax(axis=1) != D))
+        prob[a:b] = (1e-6, 1e-6, 1.0)
+        print("pre-kickoff window: model alone said not-D on {} of {} frames; forced to D"
+              .format(unsure, b - a))
+        codes = decode.decode_match(prob, match.runs, SWITCH_TEAM, SWITCH_DEAD,
+                                    round_log=ROUND_LOG)
 
     assert len(codes) == match.n_frames
     write_submission(args.out, codes)

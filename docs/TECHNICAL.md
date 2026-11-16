@@ -47,7 +47,10 @@ A network that reads long context and a decoder that charges for every change ad
    change of team (12) and a higher one for a change between alive and dead (32), chosen on
    held-out external matches.
 5. **Output.** `X` outside the two halves (published boundaries); every graded frame gets
-   `H`, `A` or `D` — we never abstain inside a half.
+   `H`, `A` or `D` — we never abstain inside a half. The published pre-kickoff stretch of the
+   second half (graded, all dead: frames 110,808–113,741, FAQ.md) is set to `D` before
+   decoding. Log-probabilities are rounded to three decimals before decoding, and the networks
+   run on one CPU thread, so floating-point differences between machines cannot change the file.
 
 **Results on held-out external matches** (spellF1, viterbi 12/32; each match scored by
 networks trained without it; DFL is closest to how the competition's answers are made):
@@ -104,6 +107,15 @@ public 5 minutes.
 Also built and dropped: the rule engine alone (0.46), a gradient-boosted tree model on windowed
 features (0.68 under an earlier noise model; kept in the repository as `--method model`),
 mirrored-pitch test-time averaging (no gain), 75 decoder settings (none reliably better).
+A second decoder study on the held-out probabilities (`scripts/decoder_lab.py`: separate prices
+for the ball going dead and for the restart, a minimum possession length before a change of
+team, geometric instead of arithmetic averaging of the training recipes) found no variant
+better by more than 0.002 on average, and none better under all three noise settings, so the
+decoder is unchanged. Rounding the decoder's inputs for reproducibility costs 0.0001.
+Self-training on the test match (fine-tuning on a held-out match's own decoded labels, all
+frames or only confident ones; `scripts/selftrain_check.py`) was tested on the 10 held-out
+matches against a control with the same fine-tuning and no self-labelled match: +0.0000 and
++0.0003 against +0.0008 for the control, so it was not applied to the competition match.
 
 ## 3. Training data
 
