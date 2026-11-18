@@ -24,12 +24,15 @@ python scripts/run_round1.py --out "outputs/Chandal Chowkdi.csv"
 ```
 
 This reads the tactical tracking, applies the trained sequence model in `models/sequence.pt` and writes
-the 199,319-row CSV.
+the 199,319-row CSV. It also prints the file's SHA-256: the same data bundle and pinned
+packages must give the same hash on every machine.
 
 ## Retrain the model (optional)
 
 The submitted sequence model was trained on a GPU with `scripts/train_seq.py`; see
-`kaggle/README.md`. The steps below rebuild the tree model (`--method model`), the fallback.
+`kaggle/README.md`. The steps below rebuild the tree model (`--method model`), a **legacy**
+fallback: it was scored under an older noise model (0.68 spellF1 on held-out DFL), so its numbers
+cannot be compared with the sequence model's (0.78).
 
 The model is trained only on other matches: the open DFL / Sportec tracking dataset
 (Bassek et al., *Scientific Data* 2025, CC-BY 4.0). To rebuild it from scratch, download the
@@ -45,7 +48,7 @@ python scripts/train_model.py          # writes models/possession.txt
 
 | Path | Purpose |
 |---|---|
-| `possession/io_atd.py`, `io_dfl.py` | Loaders into one common match format |
+| `possession/io_atd.py`, `io_dfl.py` | Loaders into one common match format (`io_atd.load_competition` finds the bundle) |
 | `possession/features.py` | Per-frame measurements (ball path, distances, player movement) |
 | `possession/engine.py` | Rule-based possession engine |
 | `possession/model.py`, `decode.py` | Learned model and Viterbi decoding |

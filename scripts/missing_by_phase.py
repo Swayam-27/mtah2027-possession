@@ -16,8 +16,7 @@ import pandas as pd
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-sys.path.insert(0, os.path.join(ROOT, "scripts"))
-from atd_stats import data_dir, load_competition  # noqa: E402
+from possession.io_atd import data_dir, load_competition  # noqa: E402
 from possession import relabel  # noqa: E402
 from possession.degrade import Noise, degrade  # noqa: E402
 from possession.match import Match, H, A, D  # noqa: E402
