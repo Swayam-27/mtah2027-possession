@@ -27,6 +27,18 @@ This reads the tactical tracking, applies the trained sequence model in `models/
 the 199,319-row CSV. It also prints the file's SHA-256: the same data bundle and pinned
 packages must give the same hash on every machine.
 
+### The submitted file
+
+| | |
+|---|---|
+| File | `Chandal Chowkdi.csv` (Round 1, submitted 17 Nov 2026) |
+| SHA-256 | _to fill in: the hash `run_round1.py` prints_ |
+| Public 5-minute window (pipeline check only) | spellF1 _to fill in_ · macroF1 _to fill in_ |
+| Held-out external matches | spellF1 0.78 on DFL (7), 0.82 on Metrica (3), see `docs/TECHNICAL.md` |
+
+`--round-prob` (off by default) adds a second rounding step for future submissions. It changes
+the output, so never use it to reproduce the Round 1 file.
+
 ## Retrain the model (optional)
 
 The submitted sequence model was trained on a GPU with `scripts/train_seq.py`; see
@@ -43,6 +55,20 @@ python scripts/prepare_external.py     # convert to cached arrays
 python scripts/cv.py                   # leave-one-match-out test (optional)
 python scripts/train_model.py          # writes models/possession.txt
 ```
+
+## Model files and Git LFS
+
+`models/` is in plain git so a fresh clone reproduces the submission with no extra tools. Keep it
+that way until the Round 1 results are out (before 26 Nov 2026), because the judges reproduce
+from this repository. After that, move the models to LFS so each retrain stops growing the clone:
+
+```
+git lfs install
+git lfs track "models/*.pt" "models/*.txt"     # appended after "* -text" in .gitattributes
+git add .gitattributes models && git commit -m "Models in Git LFS"
+```
+
+`* -text` stays first in `.gitattributes` so every file is still byte-identical on every platform.
 
 ## Layout
 

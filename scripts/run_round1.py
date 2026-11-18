@@ -54,6 +54,10 @@ if __name__ == '__main__':
                              "model. rules: rule engine only. both: average of model and sequence")
     parser.add_argument("--out", default=os.path.join(ROOT, "outputs", "submission.csv"))
     parser.add_argument("--sequence", default=SEQUENCE_PATH, help="sequence-model checkpoint")
+    parser.add_argument("--round-prob", type=int, default=None, metavar="DECIMALS",
+                        help="also round the averaged probabilities before decoding. Off by "
+                             "default: switching it on changes the file, so it is for a new "
+                             "submission only, never to reproduce the Round 1 one")
     args = parser.parse_args()
 
     match = load_competition(data_dir(args.data))
@@ -72,6 +76,8 @@ if __name__ == '__main__':
             members = seqmodel.load_all(args.sequence)
             probs.append(seqmodel.predict_all(members, match, f))
         prob = sum(probs) / len(probs)
+        if args.round_prob is not None:
+            prob = np.round(prob.astype(np.float32), args.round_prob)
         # Published by the organisers (FAQ, games.py): the second half is graded from 110,808
         # but kicks off at 113,742, and every frame in between is D. Not a hand label: a fact
         # of the scoring window, applied before decoding so the kickoff transition is clean.
