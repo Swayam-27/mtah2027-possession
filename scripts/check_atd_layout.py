@@ -12,8 +12,8 @@ import sys
 import xml.etree.ElementTree as ET
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(ROOT, "scripts"))
-from atd_stats import data_dir  # noqa: E402
+sys.path.insert(0, ROOT)
+from possession.io_atd import data_dir  # noqa: E402
 
 
 def layout(meta_path):

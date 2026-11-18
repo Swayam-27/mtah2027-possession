@@ -20,9 +20,8 @@ from scipy.signal import fftconvolve
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-sys.path.insert(0, os.path.join(ROOT, "scripts"))
 warnings.filterwarnings("ignore")
-from atd_stats import data_dir, load_competition  # noqa: E402
+from possession.io_atd import data_dir, load_competition  # noqa: E402
 from possession import io_atd  # noqa: E402
 from possession.features import player_speeds, remove_ball_teleports  # noqa: E402
 from possession.match import Match  # noqa: E402

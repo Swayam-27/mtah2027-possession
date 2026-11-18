@@ -21,8 +21,7 @@ import numpy as np
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-sys.path.insert(0, os.path.join(ROOT, "scripts"))
-from atd_stats import data_dir  # noqa: E402
+from possession.io_atd import data_dir  # noqa: E402
 from possession.io_atd import GAMES  # noqa: E402
 from possession.match import H, A, D, X  # noqa: E402
 

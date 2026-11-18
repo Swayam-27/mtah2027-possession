@@ -4,6 +4,7 @@ Raw line:  "<frame_id>:<x,y,speed>;<x,y,speed>;...:<ball x,y,...>"  with NaN for
 observation. Coordinates are normalised 0-1. frame_id counts from 1; video frames from 0.
 """
 
+import os
 import xml.etree.ElementTree as ET
 
 import numpy as np
@@ -20,6 +21,23 @@ GAMES = {
         "runs": [(11185, 90652), (110808, 190198)],
     },
 }
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def data_dir(explicit=None):
+    """The data bundle folder: --data, else MTAH_DATA_DIR, else official/data in the repo."""
+    return explicit or os.environ.get("MTAH_DATA_DIR") or os.path.join(ROOT, "official", "data")
+
+
+def load_competition(folder):
+    """The BAR-ATH tactical tracking in `folder`/tactical, as a Match."""
+    stem = os.path.join(folder, "tactical", "BAR-ATH_tactical")
+    meta, raw = stem + "_atd.xml", stem + "_atd.txt"
+    for path in (meta, raw):
+        if not os.path.isfile(path):
+            raise SystemExit("match data not found: {}\nUnpack the bundle into {} or pass --data."
+                             .format(path, folder))
+    return load(meta, raw)
 
 
 def slot_teams(meta_path):
